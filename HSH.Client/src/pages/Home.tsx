@@ -51,6 +51,36 @@ function Home() {
       </section>
 
       <section className="section">
+        <h2>Reading the results</h2>
+        <ul className="notes">
+          <li>
+            <strong>One fire, several detections.</strong> One MODIS pixel can
+            cover several VIIRS pixels, so a single MODIS hotspot is often
+            paired with several VIIRS ones. We group them and count them as
+            one fire.
+          </li>
+          <li>
+            <strong>Fire size.</strong> To compare size between the sensors,
+            we add up the VIIRS fire radiative power (FRP) inside each group
+            and compare it with the MODIS FRP. Pixel brightness alone cannot
+            be compared, because the sensors measure in different bands.
+          </li>
+          <li>
+            <strong>Confidence is not the same scale.</strong> MODIS gives a
+            number from 0 to 100. VIIRS gives low, nominal or high. To combine
+            them, MODIS is converted to the same three levels, for example
+            below 30 is low, 30 to 80 is nominal and above 80 is high.
+          </li>
+          <li>
+            <strong>Heat that is not a wildfire.</strong> Some detections come
+            from static land sources such as industrial heat, not from
+            vegetation fires. They repeat in the same place, so we filter them
+            out and keep only vegetation fires.
+          </li>
+        </ul>
+      </section>
+
+      <section className="section">
         <h2>What you can do here</h2>
         <div className="cards">
           <div className="card card-yellow">
