@@ -1,46 +1,82 @@
-import { useEffect } from "react";
-import { MapContainer, TileLayer, useMap } from "react-leaflet";
+import { useEffect, useRef } from "react";
+import L from "leaflet";
+import {
+    GeoJSON,
+    MapContainer,
+    TileLayer,
+    useMap,
+    useMapEvents,
+} from "react-leaflet";
+import type { Feature } from "geojson";
 
 interface FireMapProps {
     center: [number, number];
-    zoom?: number;
+    feature: Feature | null;
+    highlighted: boolean;
+    selectionId: number;
+    onClear: () => void;
 }
 
-function MapUpdater({
+function MapController({
     center,
-    zoom,
-}: {
-    center: [number, number];
-    zoom?: number;
-}) {
+    feature,
+    highlighted,
+    selectionId,
+    onClear,
+}: FireMapProps) {
     const map = useMap();
+    const moving = useRef(false);
     const [lat, lng] = center;
 
+    // Move the map when a country is picked
     useEffect(() => {
-        map.setView([lat, lng], zoom);
-    }, [lat, lng, zoom, map]);
+        moving.current = true; // our own move: don't clear the highlight
+        if (feature) {
+            map.fitBounds(L.geoJSON(feature).getBounds(), {
+                padding: [20, 20],
+                maxZoom: 9,
+                animate: false,
+            });
+        } else {
+            map.setView([lat, lng], 6, { animate: false });
+        }
+        moving.current = false; // non-animated moves finish synchronously
+    }, [feature, lat, lng, selectionId, map]);
 
-    // re-measure whenever the container changes size
-    useEffect(() => {
-        const container = map.getContainer();
-        const observer = new ResizeObserver(() => map.invalidateSize());
-        observer.observe(container);
-        return () => observer.disconnect();
-    }, [map]);
+    // Any move by the user removes the highlight
+    useMapEvents({
+        movestart: () => {
+            if (!moving.current) onClear();
+        },
+    });
 
-    return null;
+    if (!feature || !highlighted) return null;
+
+    return (
+        <GeoJSON
+            key={`${selectionId}-${String(feature.properties?.["ISO3166-1-Alpha-3"])}`}
+            data={feature}
+            style={{
+                color: "#FF8A00",
+                weight: 3,
+                fillColor: "#FF8A00",
+                fillOpacity: 0.08,
+            }}
+            interactive={false}
+        />
+    );
 }
 
-function FireMap({ center, zoom = 6 }: FireMapProps) {
+function FireMap(props: FireMapProps) {
     return (
         <MapContainer
-            center={center}
-            zoom={zoom}
+            center={props.center}
+            zoom={6}
             minZoom={3}
             maxZoom={18}
             style={{ height: "100%", width: "100%" }}
         >
-            <MapUpdater center={center} zoom={zoom} />
+            <MapController {...props} />
             <TileLayer
                 url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
                 maxZoom={18}
