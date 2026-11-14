@@ -8,6 +8,8 @@
   --yellow: #FFE81A;     /* sun */
   --orange: #FF8A00;     /* sunset orange */
   --red: #E8403A;        /* coral red */
+  --orange-red: #F26522; /* between orange and red */
+  --dark-red: #C42B2B;   /* a bit darker than the red */
 }
 
 * { box-sizing: border-box; }
@@ -50,11 +52,17 @@ body {
   font-size: 16px;
   font-weight: 600;
   cursor: pointer;
+  text-decoration: none;
   transition: transform 0.15s ease, background 0.15s ease;
 }
 .nav-btn:hover { transform: scale(1.06); }
-.nav-btn:hover { background: var(--orange); color: var(--black); }
-.nav-btn.active { background: var(--yellow); color: var(--black); }
+.nav-btn:focus-visible { outline: 3px solid var(--white); outline-offset: 2px; }
+
+/* each button gets its own fire colour only on hover */
+.nav-home:hover { background: var(--yellow); color: var(--black); }
+.nav-stats:hover { background: var(--orange); color: var(--black); }
+.nav-map:hover { background: var(--orange-red); color: var(--black); }
+.nav-pred:hover { background: var(--dark-red); color: var(--white); }
 
 /* ---------- Hero (top of the home page) ---------- */
 .hero {

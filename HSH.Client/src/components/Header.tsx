@@ -1,12 +1,6 @@
-import { useNavigate } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 
 function Header() {
-    const navigate = useNavigate();
-    // Clicking "Home" scrolls back to the top of the page
-    // const goHome = () => window.scrollTo({ top: 0, behavior: "smooth" });
-    const goHome = () => navigate("/");
-    const goMap = () => navigate("/Map");
-
     return (
         <header className="header">
             <div className="logo">
@@ -14,15 +8,10 @@ function Header() {
             </div>
 
             <nav className="nav">
-                <button className="nav-btn active" onClick={goHome}>
-                    Home
-                </button>
-                {/* These three do nothing yet */}
-                <button className="nav-btn">Statistics</button>
-                <button className="nav-btn" onClick={goMap}>
-                    Map
-                </button>
-                <button className="nav-btn">Predictions</button>
+                <NavLink to="/" end className="nav-btn nav-home">Home</NavLink>
+                <NavLink to="/statistics" className="nav-btn nav-stats">Statistics</NavLink>
+                <NavLink to="/map" className="nav-btn nav-map">Map</NavLink>
+                <NavLink to="/predictions" className="nav-btn nav-pred">Predictions</NavLink>
             </nav>
         </header>
     );
