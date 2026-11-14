@@ -24,7 +24,7 @@ namespace HSH.Data.Models
         public double Latitude { get; set; }
         
         [Required]
-        [Range(-180, 180)]
+        [Range(-180d, 180d)]
         public double Longitude { get; set; }
         
         public string Sat { get; set; }  // MODIS, T, A, N20

@@ -1,21 +1,22 @@
-using Microsoft.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
 
-namespace HSH.Data.Models
+namespace HSH.Data.Models;
+
+public class Country
 {
-    [Table("countries")]
-    public class Country
-    {
-        [Key]
-        [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-        public int Id { get; set; }  // Primary Key: countryId
-        
-        [Required, MaxLength(100)]
-        public string CountryName { get; set; }
-        
-        [Required, MaxLength(5)]
-        [RegularExpression("^[A-Z]{2}$", ErrorMessage = "Country code must be ISO 3166-1 alpha-2 format")]
-        public string CountryCode { get; set; }
-    }
+    public int Id { get; set; }
+
+    [MaxLength(100)]
+    public required string Name { get; set; }
+
+    [MaxLength(3)]
+    public required string Code { get; set; }
+
+    // Name of the source CSV file the points were imported from
+    [MaxLength(260)]
+    public string? SourceFile { get; set; }
+
+    public QuadTree? QuadTree { get; set; }
+
+    public ICollection<FirePoint> FirePoints { get; set; } = new List<FirePoint>();
 }

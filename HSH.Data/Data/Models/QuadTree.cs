@@ -1,22 +1,20 @@
-using Microsoft.EntityFrameworkCore;
-using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
+namespace HSH.Data.Models;
 
-namespace HSH.Data.Models
+// One quad tree per country
+public class QuadTree
 {
-    [Table("quad_tree")]
-    public class QuadTree
-    {
-        [Key]
-        [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-        public int Id { get; set; }  // Primary Key
-        
-        [Required, MaxLength(50)]
-        public string CellId { get; set; }
-        
-        [Required]
-        public int FireId { get; set; }  // Reference to fire in Data table
-        
-        public string TreeOrCountryId { get; set; }  // Could store either ID (string for flexibility)
-    }
+    public int Id { get; set; }
+
+    public int CountryId { get; set; }
+    public Country Country { get; set; } = null!;
+
+    // Max points in a leaf before it is split
+    public int NodeCapacity { get; set; }
+
+    public int MaxDepth { get; set; }
+
+    public long? RootNodeId { get; set; }
+    public QuadTreeNode? RootNode { get; set; }
+
+    public ICollection<QuadTreeNode> Nodes { get; set; } = new List<QuadTreeNode>();
 }

@@ -1,32 +1,67 @@
-using Microsoft.EntityFrameworkCore;
 using HSH.Data.Models;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 
-namespace HSH.Data
+namespace HSH.Data;
+
+public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbContext<AppUser>(options)
 {
-    public class AppDbContext : DbContext
+    public DbSet<Country> Countries => Set<Country>();
+    public DbSet<FirePoint> FirePoints => Set<FirePoint>();
+    public DbSet<QuadTree> QuadTrees => Set<QuadTree>();
+    public DbSet<QuadTreeNode> QuadTreeNodes => Set<QuadTreeNode>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        public DbSet<FireData> FireData { get; set; }
-        public DbSet<TreeBoundary> TreeBoundaries { get; set; }
-        public DbSet<Country> Countries { get; set; }
-        public DbSet<QuadTree> QuadTrees { get; set; }
+        base.OnModelCreating(modelBuilder);
 
-        public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
-
-        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        modelBuilder.Entity<Country>(e =>
         {
-            base.OnModelCreating(modelBuilder);
-            
-            // FireData - Country relationship (one-to-many)
-            modelBuilder.Entity<FireData>()
-                .HasOne(f => f.Country)
-                .WithMany()
-                .HasForeignKey(f => f.CountryId);
+            e.HasIndex(c => c.Code).IsUnique();
+        });
 
-            // FireData - TreeBoundary relationship (one-to-many)
-            modelBuilder.Entity<FireData>()
-                .HasOne(f => f.Tree)
-                .WithMany()
-                .HasForeignKey(f => f.TreeId);
-        }
+        modelBuilder.Entity<QuadTree>(e =>
+        {
+            e.HasOne(t => t.Country)
+                .WithOne(c => c.QuadTree)
+                .HasForeignKey<QuadTree>(t => t.CountryId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            e.HasOne(t => t.RootNode)
+                .WithOne()
+                .HasForeignKey<QuadTree>(t => t.RootNodeId)
+                .OnDelete(DeleteBehavior.NoAction);
+        });
+
+        modelBuilder.Entity<QuadTreeNode>(e =>
+        {
+            e.HasOne(n => n.QuadTree)
+                .WithMany(t => t.Nodes)
+                .HasForeignKey(n => n.QuadTreeId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            e.HasOne(n => n.Parent)
+                .WithMany(n => n.Children)
+                .HasForeignKey(n => n.ParentId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            e.HasIndex(n => new { n.QuadTreeId, n.MinLatitude, n.MaxLatitude, n.MinLongitude, n.MaxLongitude });
+        });
+
+        modelBuilder.Entity<FirePoint>(e =>
+        {
+            e.HasOne(p => p.Country)
+                .WithMany(c => c.FirePoints)
+                .HasForeignKey(p => p.CountryId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            e.HasOne(p => p.QuadTreeNode)
+                .WithMany(n => n.FirePoints)
+                .HasForeignKey(p => p.QuadTreeNodeId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            e.HasIndex(p => new { p.CountryId, p.Latitude, p.Longitude });
+            e.HasIndex(p => p.AcquiredAtUtc);
+        });
     }
 }

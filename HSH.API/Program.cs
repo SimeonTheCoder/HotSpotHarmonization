@@ -2,7 +2,7 @@
 
 var builder = WebApplication.CreateBuilder();
 
-builder.Services.AddSqlServer<AppDbContext>(
+builder.Services.AddNpgsql<AppDbContext>(
     builder.Configuration.GetConnectionString("DefaultConnection")
 );
 
