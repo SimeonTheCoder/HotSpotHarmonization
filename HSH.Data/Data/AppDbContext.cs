@@ -12,21 +12,34 @@ namespace HSH.Data
 
         public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
+        protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+        {
+            if (!optionsBuilder.IsConfigured)
+            {
+                // Fallback provider for EF Core design-time commands (migrations)
+                optionsBuilder.UseSqlite("Data Source=hsh_fallback.db");
+            }
+        }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
             
-            // FireData - Country relationship (one-to-many)
-            modelBuilder.Entity<FireData>()
-                .HasOne(f => f.Country)
+            modelBuilder.Entity<QuadTree>()
+                .HasOne(q => q.Fire)
                 .WithMany()
-                .HasForeignKey(f => f.CountryId);
+                .HasForeignKey(q => q.FireId);
 
-            // FireData - TreeBoundary relationship (one-to-many)
-            modelBuilder.Entity<FireData>()
-                .HasOne(f => f.Tree)
+            modelBuilder.Entity<QuadTree>()
+                .HasOne(q => q.Tree)
                 .WithMany()
-                .HasForeignKey(f => f.TreeId);
+                .HasForeignKey(q => q.TreeId);
+
+            modelBuilder.Entity<QuadTree>()
+                .HasOne(q => q.Country)
+                .WithMany()
+                .HasForeignKey(q => q.CountryId);
         }
+  
+    
     }
 }

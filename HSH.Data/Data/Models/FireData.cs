@@ -27,8 +27,7 @@ namespace HSH.Data.Models
         [Range(-180, 180)]
         public double Longitude { get; set; }
         
-        public string Sat { get; set; }  // MODIS, T, A, N20
-        
+        public SatelliteSource Sat { get; set; }
         [Required]
         [Range(typeof(decimal), "0.1", "100")]
         public decimal PixelSize { get; set; }

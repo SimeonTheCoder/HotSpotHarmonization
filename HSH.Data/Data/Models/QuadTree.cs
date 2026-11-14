@@ -1,4 +1,3 @@
-using Microsoft.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
@@ -12,11 +11,17 @@ namespace HSH.Data.Models
         public int Id { get; set; }  // Primary Key
         
         [Required, MaxLength(50)]
-        public string CellId { get; set; }
+        public string CellId { get; set; }  // e.g., the spatial cell identifier
         
         [Required]
         public int FireId { get; set; }  // Reference to fire in Data table
-        
-        public string TreeOrCountryId { get; set; }  // Could store either ID (string for flexibility)
+        public virtual FireData Fire { get; set; } // Navigation property
+
+        // Clean separation instead of a mixed string column:
+        public int? TreeId { get; set; }
+        public virtual TreeBoundary Tree { get; set; }
+
+        public int? CountryId { get; set; }
+        public virtual Country Country { get; set; }
     }
 }
