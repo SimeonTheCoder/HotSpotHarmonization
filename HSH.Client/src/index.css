@@ -141,3 +141,64 @@ body {
   .header { height: auto; padding: 10px 16px; flex-wrap: wrap; gap: 8px; }
   .nav-btn { padding: 6px 12px; font-size: 14px; }
 }
+
+
+/* ---------- Map page ---------- */
+.map-page {
+  width: 70%;
+  margin: 0 auto;
+  padding: 48px 0 24px;
+}
+
+.map-title {
+  display: inline-block;
+  margin: 0 0 24px;
+  font-size: 32px;
+  border-bottom: 5px solid var(--orange);
+}
+
+.map-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  font-weight: 600;
+}
+
+.map-toolbar select {
+  padding: 8px 14px;
+  font: inherit;
+  color: var(--black);
+  background: var(--white);
+  border: 2px solid var(--black);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.map-toolbar select:hover { border-color: var(--orange); }
+.map-toolbar select:focus-visible {
+  outline: 3px solid var(--yellow);
+  outline-offset: 2px;
+}
+
+/* the map sits in a card, like the cards on the Home page */
+.map-wrapper {
+  position: relative;
+  z-index: 0;                 /* keeps Leaflet below the sticky header (z-index 100) */
+  width: 100%;
+  height: 600px;
+  background: var(--white);
+  border: 2px solid var(--black);
+  border-top: 10px solid var(--orange);
+  border-radius: 12px;
+  overflow: hidden;           /* clips the map to the rounded corners */
+}
+
+.map-wrapper .leaflet-container {
+  width: 100%;
+  height: 100%;
+}
+
+@media (max-width: 900px) {
+  .map-page { width: 100%; padding: 32px 16px 16px; }
+  .map-wrapper { height: 420px; }
+}

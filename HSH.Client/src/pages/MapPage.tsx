@@ -10,16 +10,16 @@ function MapPage() {
         useState<CountryOption | null>(null);
     const [selectedSensor, setSelectedSensor] = useState("All");
 
-
     const center = selectedCountry?.coordinates ?? DEFAULT_CENTER;
 
     return (
         <div className="map-page">
-            <FilterDropdown options={["All", "MODIS", "VIIRS"]}
-            value={selectedSensor}
-                onChange={setSelectedSensor} />
-            
-            <CountryDropdown onChange={setSelectedCountry} />
+            <h2 className="map-title">Fire map</h2>
+
+            <div className="map-toolbar">
+                <label>Country</label>
+                <CountryDropdown onChange={setSelectedCountry} />
+            </div>
 
             <div className="map-wrapper">
                 <FireMap center={center} />
