@@ -12,14 +12,7 @@ namespace HSH.Data
 
         public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
-        protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-        {
-            if (!optionsBuilder.IsConfigured)
-            {
-                // Fallback provider for EF Core design-time commands (migrations)
-                optionsBuilder.UseSqlite("Data Source=hsh_fallback.db");
-            }
-        }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
