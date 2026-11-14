@@ -1,3 +1,5 @@
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;600&display=swap");
+
 :root {
   --white: #fff;
   --grey: #E9E6EC;       /* light grey with a tiny purple tint */
@@ -10,11 +12,13 @@
 
 * { box-sizing: border-box; }
 
+h1, h2, h3, .logo { font-family: Fraunces, Georgia, serif; }
+
 html { scroll-behavior: smooth; }
 
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family: "IBM Plex Sans", Arial, sans-serif;
   color: var(--black);
   background: var(--grey);
   line-height: 1.6;
@@ -46,13 +50,15 @@ body {
   font-size: 16px;
   font-weight: 600;
   cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease;
 }
+.nav-btn:hover { transform: scale(1.06); }
 .nav-btn:hover { background: var(--orange); color: var(--black); }
 .nav-btn.active { background: var(--yellow); color: var(--black); }
 
 /* ---------- Hero (top of the home page) ---------- */
 .hero {
-  background: linear-gradient(135deg, var(--black) 0%, var(--burgundy) 100%);
+  background: var(--black);
   color: var(--white);
   text-align: center;
   padding: 96px 24px 80px;
@@ -61,10 +67,7 @@ body {
   margin: 0 0 16px;
   font-size: clamp(36px, 6vw, 64px);
   line-height: 1.1;
-  background: linear-gradient(90deg, var(--yellow), var(--orange), var(--red));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: var(--white);
 }
 .hero p {
   max-width: 680px;
@@ -72,19 +75,12 @@ body {
   font-size: 20px;
   color: #eadcf0;
 }
-.stripe {
-  height: 8px;
-  background: linear-gradient(90deg,
-    var(--yellow), var(--orange), var(--red), var(--burgundy));
-}
 
 /* ---------- Sections ---------- */
 .section { max-width: 1000px; margin: 0 auto; padding: 72px 24px 24px; }
 .section h2 {
-  display: inline-block;
   margin: 0 0 24px;
   font-size: 32px;
-  border-bottom: 5px solid var(--orange);
 }
 .section p { font-size: 18px; max-width: 760px; }
 
@@ -95,18 +91,15 @@ body {
   margin-top: 16px;
 }
 .card {
-  border: 2px solid var(--black);
-  border-top-width: 10px;
+  border: 1px solid var(--black);
   border-radius: 12px;
   padding: 20px;
   background: var(--white);
+  transition: transform 0.2s ease;
 }
+.card:hover { transform: scale(1.03); }
 .card h3 { margin: 0 0 8px; }
 .card p { margin: 0; font-size: 16px; }
-.card-yellow { border-top-color: var(--yellow); }
-.card-orange { border-top-color: var(--orange); }
-.card-red    { border-top-color: var(--red); }
-.card-gold   { border-top-color: var(--burgundy); }
 
 .steps { list-style: none; padding: 0; margin: 16px 0 0; }
 .steps li {
@@ -151,10 +144,8 @@ body {
 }
 
 .map-title {
-  display: inline-block;
   margin: 0 0 24px;
   font-size: 32px;
-  border-bottom: 5px solid var(--orange);
 }
 
 .map-toolbar {
@@ -187,8 +178,7 @@ body {
   width: 100%;
   height: 600px;
   background: var(--white);
-  border: 2px solid var(--black);
-  border-top: 10px solid var(--orange);
+  border: 1px solid var(--black);
   border-radius: 12px;
   overflow: hidden;           /* clips the map to the rounded corners */
 }
@@ -201,4 +191,10 @@ body {
 @media (max-width: 900px) {
   .map-page { width: 100%; padding: 32px 16px 16px; }
   .map-wrapper { height: 420px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .nav-btn, .card { transition: none; }
+  .nav-btn:hover, .card:hover { transform: none; }
 }
