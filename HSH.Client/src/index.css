@@ -57,38 +57,6 @@ body {
   transition: transform 0.15s ease, background 0.15s ease;
 }
 .nav-btn:hover { transform: scale(1.06); }
-/* a ring of flames around the button, only while hovering.
-   Two layers (red outside, orange inside); the outline flickers between two shapes. */
-.nav-btn { position: relative; }
-.nav-btn::before,
-.nav-btn::after {
-  content: "";
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
-}
-.nav-btn::before {
-  inset: -13px -8px -8px -8px;
-  background: var(--red);
-  clip-path: polygon(calc(0% + 4px) calc(0% + 6.5px), calc(7% + 0px) calc(0% + 0px), calc(20% + 0px) calc(0% + 6.5px), calc(27% + 0px) calc(0% + 0px), calc(40% + 0px) calc(0% + 6.5px), calc(47% + 0px) calc(0% + 0px), calc(60% + 0px) calc(0% + 6.5px), calc(67% + 0px) calc(0% + 0px), calc(80% + 0px) calc(0% + 6.5px), calc(86.99999999999999% + 0px) calc(0% + 0px), calc(100% + -4px) calc(0% + 6.5px), calc(100% + 0px) calc(25% + 0px), calc(100% + -4px) calc(50% + 0px), calc(100% + 0px) calc(75% + 0px), calc(100% + -4px) calc(100% + -4px), calc(93.00000000000001% + 0px) calc(100% + 0px), calc(80% + 0px) calc(100% + -4px), calc(73% + 0px) calc(100% + 0px), calc(60% + 0px) calc(100% + -4px), calc(53% + 0px) calc(100% + 0px), calc(40% + 0px) calc(100% + -4px), calc(33% + 0px) calc(100% + 0px), calc(20% + 0px) calc(100% + -4px), calc(13% + 0px) calc(100% + 0px), calc(0% + 4px) calc(100% + -4px), calc(0% + 0px) calc(75% + 0px), calc(0% + 4px) calc(50% + 0px), calc(0% + 0px) calc(25% + 0px), calc(0% + 4px) calc(0% + 6.5px), calc(0% + 7px) calc(0% + 12px), calc(0% + 7px) calc(100% + -7px), calc(100% + -7px) calc(100% + -7px), calc(100% + -7px) calc(0% + 12px), calc(0% + 7px) calc(0% + 12px));
-}
-.nav-btn::after {
-  inset: -8px -5px -5px -5px;
-  background: var(--orange);
-  clip-path: polygon(calc(0% + 2.5px) calc(0% + 4px), calc(13% + 0px) calc(0% + 0px), calc(20% + 0px) calc(0% + 4px), calc(33% + 0px) calc(0% + 0px), calc(40% + 0px) calc(0% + 4px), calc(53% + 0px) calc(0% + 0px), calc(60% + 0px) calc(0% + 4px), calc(73% + 0px) calc(0% + 0px), calc(80% + 0px) calc(0% + 4px), calc(93.00000000000001% + 0px) calc(0% + 0px), calc(100% + -2.5px) calc(0% + 4px), calc(100% + 0px) calc(25% + 0px), calc(100% + -2.5px) calc(50% + 0px), calc(100% + 0px) calc(75% + 0px), calc(100% + -2.5px) calc(100% + -2.5px), calc(86.99999999999999% + 0px) calc(100% + 0px), calc(80% + 0px) calc(100% + -2.5px), calc(67% + 0px) calc(100% + 0px), calc(60% + 0px) calc(100% + -2.5px), calc(47% + 0px) calc(100% + 0px), calc(40% + 0px) calc(100% + -2.5px), calc(27% + 0px) calc(100% + 0px), calc(20% + 0px) calc(100% + -2.5px), calc(7% + 0px) calc(100% + 0px), calc(0% + 2.5px) calc(100% + -2.5px), calc(0% + 0px) calc(75% + 0px), calc(0% + 2.5px) calc(50% + 0px), calc(0% + 0px) calc(25% + 0px), calc(0% + 2.5px) calc(0% + 4px), calc(0% + 4px) calc(0% + 7px), calc(0% + 4px) calc(100% + -4px), calc(100% + -4px) calc(100% + -4px), calc(100% + -4px) calc(0% + 7px), calc(0% + 4px) calc(0% + 7px));
-}
-.nav-btn:hover::before { opacity: 1; animation: fire-outer 0.4s ease-in-out infinite alternate; }
-.nav-btn:hover::after  { opacity: 1; animation: fire-inner 0.3s ease-in-out infinite alternate; }
-
-@keyframes fire-outer {
-  from { clip-path: polygon(calc(0% + 4px) calc(0% + 6.5px), calc(7% + 0px) calc(0% + 0px), calc(20% + 0px) calc(0% + 6.5px), calc(27% + 0px) calc(0% + 0px), calc(40% + 0px) calc(0% + 6.5px), calc(47% + 0px) calc(0% + 0px), calc(60% + 0px) calc(0% + 6.5px), calc(67% + 0px) calc(0% + 0px), calc(80% + 0px) calc(0% + 6.5px), calc(86.99999999999999% + 0px) calc(0% + 0px), calc(100% + -4px) calc(0% + 6.5px), calc(100% + 0px) calc(25% + 0px), calc(100% + -4px) calc(50% + 0px), calc(100% + 0px) calc(75% + 0px), calc(100% + -4px) calc(100% + -4px), calc(93.00000000000001% + 0px) calc(100% + 0px), calc(80% + 0px) calc(100% + -4px), calc(73% + 0px) calc(100% + 0px), calc(60% + 0px) calc(100% + -4px), calc(53% + 0px) calc(100% + 0px), calc(40% + 0px) calc(100% + -4px), calc(33% + 0px) calc(100% + 0px), calc(20% + 0px) calc(100% + -4px), calc(13% + 0px) calc(100% + 0px), calc(0% + 4px) calc(100% + -4px), calc(0% + 0px) calc(75% + 0px), calc(0% + 4px) calc(50% + 0px), calc(0% + 0px) calc(25% + 0px), calc(0% + 4px) calc(0% + 6.5px), calc(0% + 7px) calc(0% + 12px), calc(0% + 7px) calc(100% + -7px), calc(100% + -7px) calc(100% + -7px), calc(100% + -7px) calc(0% + 12px), calc(0% + 7px) calc(0% + 12px)); }
-  to   { clip-path: polygon(calc(0% + 4px) calc(0% + 6.5px), calc(13% + 0px) calc(0% + 3px), calc(20% + 0px) calc(0% + 6.5px), calc(33% + 0px) calc(0% + 3px), calc(40% + 0px) calc(0% + 6.5px), calc(53% + 0px) calc(0% + 3px), calc(60% + 0px) calc(0% + 6.5px), calc(73% + 0px) calc(0% + 3px), calc(80% + 0px) calc(0% + 6.5px), calc(93.00000000000001% + 0px) calc(0% + 3px), calc(100% + -4px) calc(0% + 6.5px), calc(100% + -1.5px) calc(25% + 0px), calc(100% + -4px) calc(50% + 0px), calc(100% + -1.5px) calc(75% + 0px), calc(100% + -4px) calc(100% + -4px), calc(86.99999999999999% + 0px) calc(100% + -1.5px), calc(80% + 0px) calc(100% + -4px), calc(67% + 0px) calc(100% + -1.5px), calc(60% + 0px) calc(100% + -4px), calc(47% + 0px) calc(100% + -1.5px), calc(40% + 0px) calc(100% + -4px), calc(27% + 0px) calc(100% + -1.5px), calc(20% + 0px) calc(100% + -4px), calc(7% + 0px) calc(100% + -1.5px), calc(0% + 4px) calc(100% + -4px), calc(0% + 1.5px) calc(75% + 0px), calc(0% + 4px) calc(50% + 0px), calc(0% + 1.5px) calc(25% + 0px), calc(0% + 4px) calc(0% + 6.5px), calc(0% + 7px) calc(0% + 12px), calc(0% + 7px) calc(100% + -7px), calc(100% + -7px) calc(100% + -7px), calc(100% + -7px) calc(0% + 12px), calc(0% + 7px) calc(0% + 12px)); }
-}
-@keyframes fire-inner {
-  from { clip-path: polygon(calc(0% + 2.5px) calc(0% + 4px), calc(13% + 0px) calc(0% + 0px), calc(20% + 0px) calc(0% + 4px), calc(33% + 0px) calc(0% + 0px), calc(40% + 0px) calc(0% + 4px), calc(53% + 0px) calc(0% + 0px), calc(60% + 0px) calc(0% + 4px), calc(73% + 0px) calc(0% + 0px), calc(80% + 0px) calc(0% + 4px), calc(93.00000000000001% + 0px) calc(0% + 0px), calc(100% + -2.5px) calc(0% + 4px), calc(100% + 0px) calc(25% + 0px), calc(100% + -2.5px) calc(50% + 0px), calc(100% + 0px) calc(75% + 0px), calc(100% + -2.5px) calc(100% + -2.5px), calc(86.99999999999999% + 0px) calc(100% + 0px), calc(80% + 0px) calc(100% + -2.5px), calc(67% + 0px) calc(100% + 0px), calc(60% + 0px) calc(100% + -2.5px), calc(47% + 0px) calc(100% + 0px), calc(40% + 0px) calc(100% + -2.5px), calc(27% + 0px) calc(100% + 0px), calc(20% + 0px) calc(100% + -2.5px), calc(7% + 0px) calc(100% + 0px), calc(0% + 2.5px) calc(100% + -2.5px), calc(0% + 0px) calc(75% + 0px), calc(0% + 2.5px) calc(50% + 0px), calc(0% + 0px) calc(25% + 0px), calc(0% + 2.5px) calc(0% + 4px), calc(0% + 4px) calc(0% + 7px), calc(0% + 4px) calc(100% + -4px), calc(100% + -4px) calc(100% + -4px), calc(100% + -4px) calc(0% + 7px), calc(0% + 4px) calc(0% + 7px)); }
-  to   { clip-path: polygon(calc(0% + 2.5px) calc(0% + 4px), calc(7% + 0px) calc(0% + 2px), calc(20% + 0px) calc(0% + 4px), calc(27% + 0px) calc(0% + 2px), calc(40% + 0px) calc(0% + 4px), calc(47% + 0px) calc(0% + 2px), calc(60% + 0px) calc(0% + 4px), calc(67% + 0px) calc(0% + 2px), calc(80% + 0px) calc(0% + 4px), calc(86.99999999999999% + 0px) calc(0% + 2px), calc(100% + -2.5px) calc(0% + 4px), calc(100% + -1px) calc(25% + 0px), calc(100% + -2.5px) calc(50% + 0px), calc(100% + -1px) calc(75% + 0px), calc(100% + -2.5px) calc(100% + -2.5px), calc(93.00000000000001% + 0px) calc(100% + -1px), calc(80% + 0px) calc(100% + -2.5px), calc(73% + 0px) calc(100% + -1px), calc(60% + 0px) calc(100% + -2.5px), calc(53% + 0px) calc(100% + -1px), calc(40% + 0px) calc(100% + -2.5px), calc(33% + 0px) calc(100% + -1px), calc(20% + 0px) calc(100% + -2.5px), calc(13% + 0px) calc(100% + -1px), calc(0% + 2.5px) calc(100% + -2.5px), calc(0% + 1px) calc(75% + 0px), calc(0% + 2.5px) calc(50% + 0px), calc(0% + 1px) calc(25% + 0px), calc(0% + 2.5px) calc(0% + 4px), calc(0% + 4px) calc(0% + 7px), calc(0% + 4px) calc(100% + -4px), calc(100% + -4px) calc(100% + -4px), calc(100% + -4px) calc(0% + 7px), calc(0% + 4px) calc(0% + 7px)); }
-}
-
 .nav-btn:focus-visible { outline: 3px solid var(--white); outline-offset: 2px; }
 
 /* each button gets its own fire colour only on hover */
@@ -118,7 +86,15 @@ body {
 }
 
 /* ---------- Sections ---------- */
-.section { max-width: 1000px; margin: 0 auto; padding: 72px 24px 24px; }
+/* full-width bands, alternating light and dark */
+.band-light { background: var(--grey); color: var(--black); }
+.band-dark { background: var(--black); color: var(--white); }
+
+.section { max-width: 1000px; margin: 0 auto; padding: 72px 24px; }
+
+/* sections fade up once when they scroll into view */
+.reveal { opacity: 0; transform: translateY(24px); transition: opacity 0.6s ease, transform 0.6s ease; }
+.reveal.visible { opacity: 1; transform: none; }
 .section h2 {
   margin: 0 0 24px;
   font-size: 32px;
@@ -136,6 +112,7 @@ body {
   border-radius: 12px;
   padding: 20px;
   background: var(--white);
+  color: var(--black);
   transition: transform 0.2s ease;
 }
 .card:hover { transform: scale(1.03); }
@@ -167,7 +144,6 @@ body {
 }
 
 .footer {
-  margin-top: 72px;
   padding: 32px 24px;
   background: var(--black);
   color: var(--white);
@@ -241,6 +217,6 @@ body {
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   .nav-btn, .card { transition: none; }
+  .reveal { opacity: 1; transform: none; transition: none; }
   .nav-btn:hover, .card:hover { transform: none; }
-  .nav-btn:hover::before, .nav-btn:hover::after { animation: none; }
 }
