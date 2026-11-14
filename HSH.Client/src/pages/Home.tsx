@@ -2,7 +2,7 @@ function Home() {
   return (
     <>
       <section className="hero">
-        <h1>Two decades of fire, one clear picture.</h1>
+        <h1>Fire seasons, side by side.</h1>
         <p>
           Two decades of satellite fire data, harmonized into one clear
           picture, so patterns, trends and unusual fire seasons are easy to spot.
