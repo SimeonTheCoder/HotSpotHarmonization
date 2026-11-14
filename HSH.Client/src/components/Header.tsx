@@ -1,11 +1,11 @@
-import { NavLink } from "react-router-dom";
+import { Link, NavLink } from "react-router-dom";
 
 function Header() {
     return (
         <header className="header">
-            <div className="logo">
+            <Link to="/" className="logo">
                 Hot<span>Spot</span> Harmonization
-            </div>
+            </Link>
 
             <nav className="nav">
                 <NavLink to="/" end className="nav-btn nav-home">Home</NavLink>
