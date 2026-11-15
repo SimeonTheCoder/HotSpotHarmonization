@@ -452,3 +452,80 @@ body {
 
 /* the hint above the bar chart */
 .stats-result .chart-hint { margin: 0 0 12px; font-size: 17px; font-weight: 700; }
+
+/* ---------- Map toolbar ---------- */
+.map-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.map-field { display: flex; flex-direction: column; gap: 6px; }
+.map-field label { font-weight: 700; font-size: 14px; line-height: 1; }
+
+/* every control shares the same size, font and border */
+.map-toolbar select,
+.map-toolbar input[type="date"],
+.map-apply {
+  box-sizing: border-box;
+  height: 44px;
+  padding: 0 14px;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1;
+  border: 2px solid var(--black);
+  border-radius: 8px;
+}
+
+.map-toolbar select,
+.map-toolbar input[type="date"] {
+  min-width: 170px;
+  color: var(--black);
+  background: var(--white);
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.map-toolbar select {
+  cursor: pointer;
+  padding-right: 36px;
+  background-image: linear-gradient(45deg, transparent 50%, var(--black) 50%),
+                    linear-gradient(135deg, var(--black) 50%, transparent 50%);
+  background-position: calc(100% - 20px) 50%, calc(100% - 14px) 50%;
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+}
+
+.map-toolbar input[type="date"]::-webkit-calendar-picker-indicator { cursor: pointer; }
+
+.map-toolbar select:hover,
+.map-toolbar input[type="date"]:hover { border-color: var(--orange); }
+
+.map-toolbar select:focus-visible,
+.map-toolbar input[type="date"]:focus-visible,
+.map-apply:focus-visible {
+  outline: 3px solid var(--yellow);
+  outline-offset: 2px;
+}
+
+.map-apply {
+  min-width: 110px;
+  background: var(--black);
+  color: var(--white);
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.map-apply:hover:not(:disabled) { background: var(--orange); color: var(--black); border-color: var(--black); }
+.map-apply:disabled { opacity: 0.6; cursor: wait; }
+
+.map-hint { margin: 0 0 16px; font-size: 14px; color: var(--burgundy); }
+
+@media (max-width: 700px) {
+  .map-field,
+  .map-toolbar select,
+  .map-toolbar input[type="date"],
+  .map-apply { width: 100%; }
+}
