@@ -18,6 +18,7 @@ using Microsoft.EntityFrameworkCore;
 var positional = args.Where(a => !a.StartsWith("--")).ToArray();
 bool validateOnly = args.Contains("--validate");
 bool treeMode = args.Contains("--trees");
+bool parseTreesOnly = args.Contains("--no-write");
 
 if (positional.Length == 0 || !Directory.Exists(positional[0]))
 {
@@ -113,6 +114,8 @@ async Task TreeMode(string folder)
                 StringComparer.OrdinalIgnoreCase
             );
 
+        List<QuadTree> toAdd = new();
+
         foreach (var file in files)
         {
             int countryId = countryIds[file.CountryKey];
@@ -151,19 +154,53 @@ async Task TreeMode(string folder)
                 Console.WriteLine("Done!");
             }
 
-            FireData[] dbFireData = await db
+            if (parseTreesOnly)
+                continue;
+
+            FireDataDTO[] dbFireData = await db
                 .FireData.Where(fd => fd.CountryId == countryId)
+                .Select(fd => new FireDataDTO()
+                {
+                    Id = fd.Id,
+                    TreeId = fd.CountryId,
+                    CountryId = fd.CountryId,
+                    Latitude = (float)fd.Latitude,
+                    Longitude = (float)fd.Longitude,
+                })
                 .ToArrayAsync();
+
+            Console.WriteLine("Fetched Fire Data");
+
+            QuadTree[] processed = await db
+                .QuadTrees.Where(q => q.CountryId == countryId)
+                .ToArrayAsync();
+
+            Console.WriteLine("Fetched Processed");
+
+            if (processed.Length == dbFireData.Length)
+            {
+                Console.WriteLine("Already done, skipping!");
+                continue;
+            }
 
             TreeBoundary[] boundaries = await db
                 .TreeBoundaries.Where(b => b.TreeId == countryId)
                 .ToArrayAsync();
 
+            Console.WriteLine("Fetched Boundaries");
+
             boundaries.Sort((a, b) => a.BoundaryId.CompareTo(b.BoundaryId));
+
+            Console.WriteLine("Sorted Boundaries");
+
+            toAdd.Clear();
 
             for (int i = 0; i < dbFireData.Length; i++)
             {
                 var fire = dbFireData[i];
+
+                if (processed.Count(q => q.FireId == fire.Id) != 0)
+                    continue;
 
                 int pointer = 0;
                 ushort result = 0;
@@ -193,18 +230,19 @@ async Task TreeMode(string folder)
                     }
                 }
 
-                await db.QuadTrees.AddAsync(
+                toAdd.Add(
                     new()
                     {
                         CellId = result,
-                        Fire = fire,
+                        FireId = fire.Id,
                         TreeId = countryId,
-                        Country = fire.Country,
+                        CountryId = fire.CountryId,
                     }
                 );
             }
 
-            System.Console.WriteLine(countryId);
+            await db.AddRangeAsync(toAdd);
+            Console.WriteLine(countryId);
             await db.SaveChangesAsync();
             Console.WriteLine("Cell Ids - Done!");
         }
