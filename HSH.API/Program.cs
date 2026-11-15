@@ -4,6 +4,9 @@ using HSH.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Lets the API run as a Windows service on the server (does nothing when started with dotnet run).
+builder.Host.UseWindowsService();
+
 builder.Services.AddSqlServer<AppDbContext>(
     builder.Configuration.GetConnectionString("DefaultConnection"),
     sql => sql.CommandTimeout(120)
@@ -37,6 +40,15 @@ app.UseSwagger();
 app.UseSwaggerUI();
 
 app.UseCors("Client");
+
+// The built website (HSH.Client) lives in wwwroot after dotnet publish.
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
 app.MapControllers();
+
+// Page addresses like /statistics are handled by React Router, so they get index.html.
+// Unknown /api addresses still return 404.
+app.MapFallbackToFile("{*path:regex(^(?!api/).*$)}", "index.html");
 
 app.Run();
