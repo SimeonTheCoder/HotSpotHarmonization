@@ -1,4 +1,6 @@
-﻿using System.Reflection;
+using HSH.Core.Services.Contracts;
+using HSH.Core.Services.MapService;
+using System.Reflection;
 using HSH.Core.Services;
 using HSH.Data;
 
@@ -12,6 +14,7 @@ builder.Services.AddSqlServer<AppDbContext>(
     sql => sql.CommandTimeout(120)
 );
 
+builder.Services.AddScoped<IMapService, MapService>();
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<ICountryLookup, CountryLookup>();
 builder.Services.AddScoped<IFireBlockLocator, FireBlockLocator>();
