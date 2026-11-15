@@ -7,10 +7,12 @@ import {
     getDayNight,
     getInstruments,
     getMonthly,
+    getSeasonality,
     getTopFires,
     type DayNight,
     type Fire,
     type InstrumentRow,
+    type SeasonRow,
 } from "../data/api";
 import countries from "../data/countries";
 import { fireTypes, type FireType } from "../data/fireTypes";
@@ -45,6 +47,16 @@ const dataOptions: Option[] = [
 
 const yearOptions: Option[] = [];
 for (let y = TO; y >= FROM; y--) yearOptions.push({ value: String(y), label: String(y) });
+
+// what the API sent; each view fills only its own part
+interface ApiData {
+    rows: MonthlyRow[]; // "per month in one year" and "compare two years"
+    instrumentRows: InstrumentRow[]; // "MODIS vs VIIRS"
+    dayNight: DayNight | null; // "Day vs night"
+    seasonRows: SeasonRow[]; // "Fires by month (seasonality)"
+}
+
+const NO_DATA: ApiData = { rows: [], instrumentRows: [], dayNight: null, seasonRows: [] };
 
 
 // 12345 becomes "12,345"
@@ -84,17 +96,11 @@ function Statistics() {
     const [monthYear, setMonthYear] = useState("2025"); // used when view is "month"
     const [yearA, setYearA] = useState("2024"); // used when view is "compare"
     const [yearB, setYearB] = useState("2025");
+    const [fromYear, setFromYear] = useState(String(FROM)); // the years "Fires by month (seasonality)" adds up
+    const [toYear, setToYear] = useState(String(TO));
     const [types, setTypes] = useState<FireType[]>(["vegetation"]);
-    // what the API sent for the "per month in one year" and "compare two years" views,
-    // together with the choices it belongs to (so an old answer is never shown for new choices)
-    // ("MODIS vs VIIRS" fills instrumentRows instead of rows, "Day vs night" fills dayNight)
-    const [apiResult, setApiResult] = useState<{
-        key: string;
-        rows: MonthlyRow[];
-        instrumentRows: InstrumentRow[];
-        dayNight: DayNight | null;
-        error: string | null;
-    } | null>(null);
+    // what the API sent, together with the choices it belongs to (so an old answer is never shown for new choices)
+    const [apiResult, setApiResult] = useState<(ApiData & { key: string; error: string | null }) | null>(null);
     // the bar the user clicked: the biggest fires of that month (or year) are listed under the chart
     const [picked, setPicked] = useState<{
         country: string;
@@ -109,24 +115,28 @@ function Statistics() {
 
     // the pie chart always shows the 12 months of one year
     const isPie = kind === "pie";
-    // "Number of fires over time", "MODIS vs VIIRS" and "Day vs night" come from the API; the other statistics show one demo chart
+    // "Fire intensity (FRP)" and "Detection confidence" show one demo chart; the other statistics come from the API
     const statType = STAT_TYPES.find((t) => t.value === stat)!;
     const isSatellite = stat === "satellite";
-    // "Day vs night" counts all types of fire, so the fire type checkboxes are not used there
     const isDayNight = stat === "day-night";
+    const isSeasonality = stat === "seasonality";
+    // "Day vs night" counts all types of fire, so the fire type checkboxes are not used there
+    const allTypes = isDayNight;
     const extra =
-        stat === "fires-over-time" || isSatellite || isDayNight
-            ? null
-            : getStatData(stat, country, `${FROM}-01-01`, `${TO}-12-31`);
+        stat === "frp-over-time" || stat === "confidence"
+            ? getStatData(stat, country, `${FROM}-01-01`, `${TO}-12-31`)
+            : null;
     const shownView = extra
         ? "stat"
         : isSatellite
           ? "satellite"
           : isDayNight
             ? "daynight"
-            : isPie
-              ? "month"
-              : view;
+            : isSeasonality
+              ? "seasonality"
+              : isPie
+                ? "month"
+                : view;
     // views that show one chosen year
     const oneYear = shownView === "month" || shownView === "satellite" || shownView === "daynight";
 
@@ -141,20 +151,23 @@ function Statistics() {
     // the API wants the two-letter code ("BG"), the page keeps the three-letter one ("BGR")
     const countryCode2 = countries.find((c) => c.code === country)?.value;
 
-    // the month, compare, MODIS vs VIIRS and day vs night views get their numbers from the API
-    const usesApi = shownView !== "stat" && !!countryCode2 && (isDayNight || types.length > 0);
+    // every view except the demo one gets its numbers from the API
+    const usesApi = shownView !== "stat" && !!countryCode2 && (allTypes || types.length > 0);
     const requestKey =
         shownView === "compare"
             ? `compare|${countryCode2}|${yearA}|${yearB}|${types.join(",")}`
-            : shownView === "daynight"
-              ? `daynight|${countryCode2}|${monthYear}`
-              : `${shownView}|${countryCode2}|${monthYear}|${types.join(",")}`;
+            : shownView === "seasonality"
+              ? `seasonality|${countryCode2}|${fromYear}|${toYear}|${types.join(",")}`
+              : allTypes
+                ? `${shownView}|${countryCode2}|${monthYear}`
+                : `${shownView}|${countryCode2}|${monthYear}|${types.join(",")}`;
     const apiDone = apiResult?.key === requestKey;
     const loading = usesApi && !apiDone;
     const apiError = apiDone ? apiResult.error : null;
     const yearRows = apiDone ? apiResult.rows : [];
     const instrumentRows = apiDone ? apiResult.instrumentRows : [];
     const dayNight = apiDone ? apiResult.dayNight : null;
+    const seasonRows = apiDone ? apiResult.seasonRows : [];
 
     function toggleType(type: FireType) {
         setTypes(types.includes(type) ? types.filter((t) => t !== type) : [...types, type]);
@@ -164,23 +177,24 @@ function Statistics() {
     useEffect(() => {
         if (!usesApi || !countryCode2) return;
         let cancelled = false;
-        const request: Promise<{ rows: MonthlyRow[]; instrumentRows: InstrumentRow[]; dayNight: DayNight | null }> =
+        const year = Number(monthYear);
+        const request: Promise<ApiData> =
             shownView === "daynight"
-                ? getDayNight(countryCode2, Number(monthYear)).then((dayNight) => ({
-                      rows: [],
-                      instrumentRows: [],
-                      dayNight,
-                  }))
-                : shownView === "satellite"
-                  ? getInstruments(countryCode2, Number(monthYear), types).then((instrumentRows) => ({
-                        rows: [],
-                        instrumentRows,
-                        dayNight: null,
+                ? getDayNight(countryCode2, year).then((dayNight) => ({ ...NO_DATA, dayNight }))
+                : shownView === "seasonality"
+                  ? getSeasonality(countryCode2, Number(fromYear), Number(toYear), types).then((seasonRows) => ({
+                        ...NO_DATA,
+                        seasonRows,
                     }))
-                  : (shownView === "month"
-                        ? getMonthly(countryCode2, Number(monthYear), types)
-                        : compareYears(countryCode2, Number(yearA), Number(yearB), types)
-                    ).then((rows) => ({ rows, instrumentRows: [], dayNight: null }));
+                  : shownView === "satellite"
+                    ? getInstruments(countryCode2, year, types).then((instrumentRows) => ({
+                          ...NO_DATA,
+                          instrumentRows,
+                      }))
+                    : (shownView === "month"
+                          ? getMonthly(countryCode2, year, types)
+                          : compareYears(countryCode2, Number(yearA), Number(yearB), types)
+                      ).then((rows) => ({ ...NO_DATA, rows }));
         request
             .then((result) => {
                 if (!cancelled) setApiResult({ key: requestKey, ...result, error: null });
@@ -190,9 +204,7 @@ function Statistics() {
                 if (!cancelled) {
                     setApiResult({
                         key: requestKey,
-                        rows: [],
-                        instrumentRows: [],
-                        dayNight: null,
+                        ...NO_DATA,
                         error: "The numbers could not be loaded. Is the API running?",
                     });
                 }
@@ -200,7 +212,7 @@ function Statistics() {
         return () => {
             cancelled = true;
         };
-    }, [usesApi, requestKey, shownView, countryCode2, monthYear, yearA, yearB, types]);
+    }, [usesApi, requestKey, shownView, countryCode2, monthYear, yearA, yearB, fromYear, toYear, types]);
 
     // the list only belongs to the country it was opened for, and only to the bar chart
     const period =
@@ -289,6 +301,21 @@ function Statistics() {
         if (total > 0) {
             const share = Math.round((day / total) * 100);
             sentence = `In ${monthYear}, ${fmt(day)} hotspots (${share}%) were seen by day and ${fmt(night)} (${100 - share}%) by night.`;
+        }
+    } else if (shownView === "seasonality") {
+        // each calendar month, added up over all the chosen years
+        labels = MONTHS;
+        const values = MONTHS.map((_, i) => seasonRows.find((r) => r.month === i + 1)?.hotspots ?? null);
+        series = [{ name: countryName, values }];
+        const years = fromYear === toYear ? fromYear : `${fromYear} to ${toYear}`;
+        title = isPie
+            ? `Share of each month in ${countryName}, ${years}`
+            : `Hotspots by month in ${countryName}, ${years}`;
+        yTitle = fromYear === toYear ? "Hotspots per month" : "Hotspots per month, all years added up";
+
+        const e = extremes(FULL_MONTHS, values);
+        if (e && e.most.value > 0) {
+            sentence = `From ${fromYear} to ${toYear}, the most hotspots were in ${e.most.name} (${fmt(e.most.value)}) and the fewest in ${e.least.name} (${fmt(e.least.value)}).`;
         }
     } else if (shownView === "satellite") {
         // one bar (or line) per instrument for each month; the pie shows the share of each instrument in the year
@@ -450,9 +477,28 @@ function Statistics() {
         };
     }
 
-    const noTypes = !extra && !isDayNight && types.length === 0;
-    // the day vs night bars stand for a whole year, so they do not open the list of the hottest fires
-    const barsClickable = !extra && !isDayNight;
+    // in the seasonality view, the key numbers are about all the chosen years together
+    let seasonGlance: {
+        total: number;
+        busiest: string;
+        quietest: string;
+        perYear: number;
+    } | null = null;
+    if (shownView === "seasonality" && apiDone && !apiError) {
+        const total = sum(series[0].values);
+        const e = extremes(FULL_MONTHS, series[0].values);
+        seasonGlance = {
+            total,
+            busiest: e && total > 0 ? e.most.name : "n/a",
+            quietest: e && total > 0 ? e.least.name : "n/a",
+            perYear: Math.round(total / (Number(toYear) - Number(fromYear) + 1)),
+        };
+    }
+
+    const noTypes = !extra && !allTypes && types.length === 0;
+    // only bars that stand for one month of one year open the list of the hottest fires
+    // (day vs night stands for a whole year, seasonality for many years)
+    const barsClickable = !extra && !isDayNight && !isSeasonality;
     const marksHighest = !isPie && series.length === 1;
 
     return (
@@ -486,7 +532,7 @@ function Statistics() {
                             <Combobox id="stat" options={statOptions} value={stat} onChange={chooseStat} />
                         </div>
 
-                        {!extra && !isPie && !isSatellite && !isDayNight && (
+                        {stat === "fires-over-time" && !isPie && (
                             <div className="field">
                                 <label htmlFor="data">Data</label>
                                 <Combobox id="data" options={dataOptions} value={view} onChange={setView} />
@@ -520,6 +566,31 @@ function Statistics() {
                             </>
                         )}
 
+                        {shownView === "seasonality" && (
+                            <>
+                                <div className="field">
+                                    <label htmlFor="from-year">From year</label>
+                                    <Combobox
+                                        id="from-year"
+                                        options={yearOptions.filter((o) => Number(o.value) <= Number(toYear))}
+                                        value={fromYear}
+                                        onChange={setFromYear}
+                                        placeholder="Type a year"
+                                    />
+                                </div>
+                                <div className="field">
+                                    <label htmlFor="to-year">To year</label>
+                                    <Combobox
+                                        id="to-year"
+                                        options={yearOptions.filter((o) => Number(o.value) >= Number(fromYear))}
+                                        value={toYear}
+                                        onChange={setToYear}
+                                        placeholder="Type a year"
+                                    />
+                                </div>
+                            </>
+                        )}
+
                         {oneYear && (
                             <div className="field">
                                 <label htmlFor="year">Year</label>
@@ -539,7 +610,7 @@ function Statistics() {
                         </div>
                     </div>
 
-                    {!extra && !isDayNight && (
+                    {!extra && !allTypes && (
                     <fieldset className="types">
                         <legend>Type of fire</legend>
                         <div className="types-row">
@@ -654,6 +725,32 @@ function Statistics() {
                             </section>
                         )}
 
+                        {seasonGlance && (
+                            <section aria-label={`Key numbers for ${countryName}`}>
+                                <h3 className="key-title">
+                                    {countryName} at a glance, {fromYear === toYear ? fromYear : `${fromYear} to ${toYear}`}
+                                </h3>
+                                <div className="key-numbers">
+                                    <div className="key-number">
+                                        <p className="big">{fmt(seasonGlance.total)}</p>
+                                        <p className="small">hotspots in all the chosen years</p>
+                                    </div>
+                                    <div className="key-number">
+                                        <p className="big">{seasonGlance.busiest}</p>
+                                        <p className="small">the busiest month of the year</p>
+                                    </div>
+                                    <div className="key-number">
+                                        <p className="big">{seasonGlance.quietest}</p>
+                                        <p className="small">the quietest month of the year</p>
+                                    </div>
+                                    <div className="key-number">
+                                        <p className="big">{fmt(seasonGlance.perYear)}</p>
+                                        <p className="small">hotspots in an average year</p>
+                                    </div>
+                                </div>
+                            </section>
+                        )}
+
                         {monthGlance && (
                             <section aria-label={`Key numbers for ${countryName}`}>
                                 <h3 className="key-title">
@@ -691,7 +788,7 @@ function Statistics() {
                             <p className="counted">
                                 {extra ? (
                                     "Demo numbers, all types of fire."
-                                ) : isDayNight ? (
+                                ) : allTypes ? (
                                     <>
                                         Counted: <strong>all types of fire</strong>.
                                     </>

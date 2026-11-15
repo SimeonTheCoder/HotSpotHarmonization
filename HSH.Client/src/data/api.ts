@@ -67,6 +67,20 @@ export function getDayNight(countryCode: string, year: number): Promise<DayNight
     return get<DayNight>(`/api/statistics/${encodeURIComponent(countryCode)}/daynight`, { year });
 }
 
+export interface SeasonRow {
+    month: number; // 1 to 12
+    hotspots: number; // that month of every year from "from" to "to", added up
+}
+
+// hotspots per calendar month, added up over the years from..to: 12 rows
+export function getSeasonality(countryCode: string, from: number, to: number, types: FireType[]): Promise<SeasonRow[]> {
+    return get<SeasonRow[]>(`/api/statistics/${encodeURIComponent(countryCode)}/seasonality`, {
+        from,
+        to,
+        types: types.join(","),
+    });
+}
+
 // One fire detection as the "Detailed stats" list shows it (the FIRMS columns of the database).
 export interface Fire {
     id: string; // database Id

@@ -33,8 +33,21 @@ public interface IStatisticsService
         CancellationToken ct = default
     );
 
-    Task<DayNightDTO> GetDayNight(string countryCode, int year);
-    
+    /// <summary>
+    /// Hotspots per calendar month (always 12 rows) of one country, added up over the years fromYear to toYear.
+    /// Null if the country is unknown.
+    /// </summary>
+    Task<IReadOnlyList<SeasonalityRow>?> GetSeasonalityAsync(
+        string countryCode,
+        int fromYear,
+        int toYear,
+        IReadOnlyCollection<FireType> types,
+        CancellationToken ct = default
+    );
+
+    /// <summary>Hotspots of one country in one year seen by day and by night (all fire types). Throws ArgumentException if the country is unknown.</summary>
+    Task<DayNightDTO> GetDayNight(string countryCode, int year, CancellationToken ct = default);
+
     /// <summary>
     /// The hottest fires of one country in one month (or the whole year when month is null), hottest first.
     /// Null if the country is unknown.
@@ -280,27 +293,60 @@ public class StatisticsService(
         )!;
     }
 
-    public async Task<DayNightDTO> GetDayNight(string countryCode, int year)
+    public async Task<IReadOnlyList<SeasonalityRow>?> GetSeasonalityAsync(
+        string countryCode,
+        int fromYear,
+        int toYear,
+        IReadOnlyCollection<FireType> types,
+        CancellationToken ct = default
+    )
     {
-        int? countryId = await countries.FindIdAsync(countryCode);
-        if (countryId == null)
-            throw new ArgumentException("Invalid country!");
+        int? countryId = await countries.FindIdAsync(countryCode, ct);
+        if (countryId is null)
+            return null;
 
-        int dayFires = await db
-            .FireData.AsNoTracking()
-            .CountAsync(f =>
-                f.CountryId == countryId && f.AcquiredAt.Year == year && f.DayNight == DayNight.Day
-            );
+        // One (cached) query per year: each stays small, and the years are shared with the "per month" chart.
+        var counts = new int[12];
+        for (int year = fromYear; year <= toYear; year++)
+        {
+            foreach (var row in await MonthlyForYearAsync(countryId.Value, year, types, ct))
+                counts[row.Month - 1] += row.Hotspots;
+        }
 
-        int nightFires = await db
-            .FireData.AsNoTracking()
-            .CountAsync(f =>
-                f.CountryId == countryId
-                && f.AcquiredAt.Year == year
-                && f.DayNight == DayNight.Night
-            );
+        return Enumerable.Range(1, 12).Select(month => new SeasonalityRow(month, counts[month - 1])).ToList();
+    }
 
-        return new DayNightDTO(dayFires, nightFires);
+    public async Task<DayNightDTO> GetDayNight(string countryCode, int year, CancellationToken ct = default)
+    {
+        int countryId = await FindIdOrThrowAsync(countryCode, ct);
+
+        return (await cache.GetOrCreateAsync(
+            $"daynight:{countryId}:{year}",
+            async entry =>
+            {
+                entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(12);
+
+                int day = 0;
+                int night = 0;
+                foreach (var block in await BlocksOfYearAsync(countryId, year, ct))
+                {
+                    var perTime = await FiresOfYear(block, year)
+                        .GroupBy(f => f.DayNight)
+                        .Select(g => new { DayNight = g.Key, Count = g.Count() })
+                        .ToListAsync(ct);
+
+                    foreach (var t in perTime)
+                    {
+                        if (t.DayNight == DayNight.Day)
+                            day += t.Count;
+                        else
+                            night += t.Count;
+                    }
+                }
+
+                return new DayNightDTO(day, night);
+            }
+        ))!;
     }
 
     public async Task<DetectionConfidenceDTO> GetDetectionConfidence(string countryCode, int year)
@@ -311,8 +357,27 @@ public class StatisticsService(
 
         int low = await db.FireData.AsNoTracking().Where(f => f.CountryId == countryId).CountAsync(f => f.ConfidenceLevel == ConfidenceLevel.Low || f.ConfidencePercent <= 30);
         int nominal = await db.FireData.AsNoTracking().Where(f => f.CountryId == countryId).CountAsync(f => f.ConfidenceLevel == ConfidenceLevel.Nominal || (f.ConfidencePercent > 30 && f.ConfidencePercent <= 80));
-        int high = await db.FireData.AsNoTracking().Where(f => f.CountryId == countryId).CountAsync(f => f.ConfidenceLevel == ConfidenceLevel.High || f.ConfidencePercent > 80); 
+        int high = await db.FireData.AsNoTracking().Where(f => f.CountryId == countryId).CountAsync(f => f.ConfidenceLevel == ConfidenceLevel.High || f.ConfidencePercent > 80);
 
         return new DetectionConfidenceDTO(low, nominal, high);
+    }
+
+    private async Task<int> FindIdOrThrowAsync(string countryCode, CancellationToken ct)
+    {
+        int? countryId = await countries.FindIdAsync(countryCode, ct);
+        return countryId ?? throw new ArgumentException($"Unknown country code '{countryCode}'.");
+    }
+
+    // Only the Id ranges of the country that contain this year are read (usually 1-3 CSV files).
+    private async Task<IEnumerable<FireBlock>> BlocksOfYearAsync(int countryId, int year, CancellationToken ct) =>
+        (await blocks.GetBlocksAsync(countryId, ct)).Where(b => b.Overlaps(year));
+
+    private IQueryable<HSH.Data.Models.FireData> FiresOfYear(FireBlock block, int year)
+    {
+        var from = new DateTime(year, 1, 1);
+        var to = from.AddYears(1);
+        return db.FireData.AsNoTracking()
+            .Where(f => f.Id >= block.StartId && f.Id <= block.EndId)
+            .Where(f => f.AcquiredAt >= from && f.AcquiredAt < to);
     }
 }
