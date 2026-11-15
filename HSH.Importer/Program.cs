@@ -14,6 +14,7 @@ using HSH.Data.Models;
 using HSH.Importer;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using HSH.Data.Data.Models;
 
 var positional = args.Where(a => !a.StartsWith("--")).ToArray();
 bool validateOnly = args.Contains("--validate");

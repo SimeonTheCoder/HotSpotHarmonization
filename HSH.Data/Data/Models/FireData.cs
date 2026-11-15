@@ -2,6 +2,7 @@ using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using HSH.Data.Enums;
+using HSH.Data.Data.Models;
 
 namespace HSH.Data.Models
 {
