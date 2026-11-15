@@ -1,6 +1,6 @@
 using HSH.Data.Enums;
 
-namespace HSH.API.Services;
+namespace HSH.Core.Services;
 
 /// <summary>Parses the client's fire type names ("vegetation,volcano,human,gas") into FireType values.</summary>
 public static class FireTypeNames

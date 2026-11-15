@@ -1,10 +1,10 @@
-using HSH.API.Models;
+using HSH.Core.DTOs;
 using HSH.Data;
 using HSH.Data.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 
-namespace HSH.API.Services;
+namespace HSH.Core.Services;
 
 public interface IStatisticsService
 {

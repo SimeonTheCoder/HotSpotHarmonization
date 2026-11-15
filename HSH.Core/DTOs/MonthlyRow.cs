@@ -1,4 +1,4 @@
-namespace HSH.API.Models;
+namespace HSH.Core.DTOs;
 
 /// <summary>Number of hotspots of one country in one month (same shape as the client's MonthlyRow).</summary>
 /// <param name="Year">Calendar year, e.g. 2025.</param>

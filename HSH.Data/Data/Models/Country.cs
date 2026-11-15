@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
-namespace HSH.Data.Data.Models
+namespace HSH.Data.Models
 {
     public class Country
     {

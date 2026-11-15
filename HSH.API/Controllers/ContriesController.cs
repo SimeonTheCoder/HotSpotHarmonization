@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using HSH.Core.Interfaces;
 using HSH.API.Models.Requests;
 using HSH.Core.DTOs;
-using HSH.Data.Data.Models;
+using HSH.Data.Models;
 
 namespace HSH.API.Controllers
 {

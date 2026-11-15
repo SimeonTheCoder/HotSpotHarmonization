@@ -2,7 +2,7 @@ using HSH.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 
-namespace HSH.API.Services;
+namespace HSH.Core.Services;
 
 /// <summary>A contiguous range of FireData Ids that belongs to one country (in practice: one imported CSV file).</summary>
 public record FireBlock(long StartId, long EndId, int FirstYear, int LastYear)

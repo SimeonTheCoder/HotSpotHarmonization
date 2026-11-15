@@ -1,5 +1,5 @@
 ﻿using System.Reflection;
-using HSH.API.Services;
+using HSH.Core.Services;
 using HSH.Data;
 
 var builder = WebApplication.CreateBuilder(args);

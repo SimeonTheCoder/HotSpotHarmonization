@@ -1,6 +1,4 @@
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using HSH.Data.Data.Models;
+using HSH.Data.Models;
 using HSH.Core.DTOs;
 
 namespace HSH.Core.Interfaces

@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using HSH.Core.Interfaces; 
 using HSH.Core;
-using HSH.Data.Data.Models;
+using HSH.Data.Models;
 using HSH.Data;
 using HSH.Core.DTOs;
 

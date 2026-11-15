@@ -2,7 +2,7 @@ using HSH.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 
-namespace HSH.API.Services;
+namespace HSH.Core.Services;
 
 public interface ICountryLookup
 {

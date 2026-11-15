@@ -1,5 +1,5 @@
-using HSH.API.Models;
-using HSH.API.Services;
+using HSH.Core.DTOs;
+using HSH.Core.Services;
 using Microsoft.AspNetCore.Mvc;
 
 namespace HSH.API.Controllers;
