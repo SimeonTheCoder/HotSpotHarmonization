@@ -3,6 +3,7 @@ using HSH.Core.Services.MapService;
 using System.Reflection;
 using HSH.Core.Interfaces;
 using HSH.Core.Services;
+using HSH.Core.Services.Heatmap;
 using HSH.Data;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -22,6 +23,11 @@ builder.Services.AddScoped<ICountryService,CountryService >();
 builder.Services.AddScoped<ICountryLookup, CountryLookup>();
 builder.Services.AddScoped<IFireBlockLocator, FireBlockLocator>();
 builder.Services.AddScoped<IStatisticsService, StatisticsService>();
+
+// World heatmap: built once in the background, then kept in memory and in App_Data/heatmap.png
+builder.Services.AddSingleton(new HeatmapOptions(
+    builder.Configuration["Heatmap:CacheFile"] ?? Path.Combine(builder.Environment.ContentRootPath, "App_Data", "heatmap.png")));
+builder.Services.AddSingleton<IHeatmapService, HeatmapService>();
 
 builder.Services.AddControllers();
 builder.Services.AddProblemDetails();

@@ -113,8 +113,9 @@ try {
     }
 
     Step "Copying the new version to $InstallDir"
-    # /MIR mirrors the build, /XF keeps the server's own settings file
-    robocopy $staging $InstallDir /MIR /XF appsettings.Production.json /NFL /NDL /NJH /NJS /NP | Out-Null
+    # /MIR mirrors the build, /XF keeps the server's own settings file,
+    # /XD keeps App_Data (the generated heatmap.png, which takes minutes to build)
+    robocopy $staging $InstallDir /MIR /XF appsettings.Production.json /XD (Join-Path $InstallDir 'App_Data') /NFL /NDL /NJH /NJS /NP | Out-Null
     if ($LASTEXITCODE -ge 8) { throw "robocopy failed with exit code $LASTEXITCODE" }
 
     if (-not $service) {
