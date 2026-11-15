@@ -25,10 +25,16 @@ public class StatisticsController(IStatisticsService statistics) : ControllerBas
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<IReadOnlyList<MonthlyRow>>> GetMonthly(
-        string country, [FromQuery] int year, [FromQuery] string? types, CancellationToken ct)
+        string country,
+        [FromQuery] int year,
+        [FromQuery] string? types,
+        CancellationToken ct
+    )
     {
-        if (!ValidYear(year)) return YearProblem(nameof(year));
-        if (!FireTypeNames.TryParse(types, out var fireTypes, out var invalid)) return TypeProblem(invalid);
+        if (!ValidYear(year))
+            return YearProblem(nameof(year));
+        if (!FireTypeNames.TryParse(types, out var fireTypes, out var invalid))
+            return TypeProblem(invalid);
 
         var rows = await statistics.GetMonthlyAsync(country, year, fireTypes, ct);
         return rows is null ? CountryNotFound(country) : Ok(rows);
@@ -46,13 +52,24 @@ public class StatisticsController(IStatisticsService statistics) : ControllerBas
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<IReadOnlyList<MonthlyRow>>> CompareYears(
-        string country, [FromQuery] int yearA, [FromQuery] int yearB, [FromQuery] string? types, CancellationToken ct)
+        string country,
+        [FromQuery] int yearA,
+        [FromQuery] int yearB,
+        [FromQuery] string? types,
+        CancellationToken ct
+    )
     {
-        if (!ValidYear(yearA)) return YearProblem(nameof(yearA));
-        if (!ValidYear(yearB)) return YearProblem(nameof(yearB));
+        if (!ValidYear(yearA))
+            return YearProblem(nameof(yearA));
+        if (!ValidYear(yearB))
+            return YearProblem(nameof(yearB));
         if (yearA == yearB)
-            return Problem("You cannot select the same year twice.", statusCode: StatusCodes.Status400BadRequest);
-        if (!FireTypeNames.TryParse(types, out var fireTypes, out var invalid)) return TypeProblem(invalid);
+            return Problem(
+                "You cannot select the same year twice.",
+                statusCode: StatusCodes.Status400BadRequest
+            );
+        if (!FireTypeNames.TryParse(types, out var fireTypes, out var invalid))
+            return TypeProblem(invalid);
 
         var rows = await statistics.CompareYearsAsync(country, yearA, yearB, fireTypes, ct);
         return rows is null ? CountryNotFound(country) : Ok(rows);
@@ -69,10 +86,16 @@ public class StatisticsController(IStatisticsService statistics) : ControllerBas
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<IReadOnlyList<InstrumentMonthlyRow>>> GetInstruments(
-        string country, [FromQuery] int year, [FromQuery] string? types, CancellationToken ct)
+        string country,
+        [FromQuery] int year,
+        [FromQuery] string? types,
+        CancellationToken ct
+    )
     {
-        if (!ValidYear(year)) return YearProblem(nameof(year));
-        if (!FireTypeNames.TryParse(types, out var fireTypes, out var invalid)) return TypeProblem(invalid);
+        if (!ValidYear(year))
+            return YearProblem(nameof(year));
+        if (!FireTypeNames.TryParse(types, out var fireTypes, out var invalid))
+            return TypeProblem(invalid);
 
         var rows = await statistics.GetInstrumentsAsync(country, year, fireTypes, ct);
         return rows is null ? CountryNotFound(country) : Ok(rows);
@@ -106,13 +129,39 @@ public class StatisticsController(IStatisticsService statistics) : ControllerBas
         return rows is null ? CountryNotFound(country) : Ok(rows);
     }
 
+    [HttpGet("{country}/daynight")]
+    public async Task<IActionResult> GetDayVsNight(string country, [FromQuery] int year)
+    {
+        if (!ValidYear(year))
+            return YearProblem(nameof(year));
+        
+        DayNightDTO dto;
+
+        try
+        {
+            dto = await statistics.GetDayNight(country, year);
+        }
+        catch(ArgumentException ae)
+        {
+            return BadRequest(ae.Message);
+        }
+
+        return Ok(dto);
+    }
+
     private static bool ValidYear(int year) => year is >= MinYear and <= MaxYear;
 
     private ObjectResult YearProblem(string name) =>
-        Problem($"'{name}' must be a year between {MinYear} and {MaxYear}.", statusCode: StatusCodes.Status400BadRequest);
+        Problem(
+            $"'{name}' must be a year between {MinYear} and {MaxYear}.",
+            statusCode: StatusCodes.Status400BadRequest
+        );
 
     private ObjectResult TypeProblem(string? invalid) =>
-        Problem($"Unknown fire type '{invalid}'. Use vegetation, volcano, human or gas.", statusCode: StatusCodes.Status400BadRequest);
+        Problem(
+            $"Unknown fire type '{invalid}'. Use vegetation, volcano, human or gas.",
+            statusCode: StatusCodes.Status400BadRequest
+        );
 
     private ObjectResult CountryNotFound(string country) =>
         Problem($"Unknown country code '{country}'.", statusCode: StatusCodes.Status404NotFound);
