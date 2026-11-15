@@ -54,6 +54,37 @@ function makeFireIcon(size: number, anchorY: number, popupY: number) {
 const fireIcon = makeFireIcon(40, 36, -34); // the single fire opened from statistics
 const areaFireIcon = makeFireIcon(28, 25, -24); // fires found by "Search this area"
 
+// fires from "Search by country and dates" can be tens of thousands, so they are drawn as small dots
+// on one canvas (fast) instead of one SVG icon per fire (slow)
+const dotRenderer = L.canvas({ padding: 0.5 });
+
+function FireDots({ fires }: { fires: FireDetection[] }) {
+    const map = useMap();
+
+    useEffect(() => {
+        if (fires.length === 0) return;
+        const layer = L.layerGroup(
+            fires.map((f) =>
+                L.circleMarker([f.latitude, f.longitude], {
+                    renderer: dotRenderer,
+                    radius: 3,
+                    color: "#C42B2B",
+                    weight: 1,
+                    fillColor: "#FF8A00",
+                    fillOpacity: 0.85,
+                }).bindPopup(
+                    `<strong>Fire</strong><br />${f.latitude.toFixed(3)}, ${f.longitude.toFixed(3)}`,
+                ),
+            ),
+        ).addTo(map);
+        return () => {
+            layer.remove();
+        };
+    }, [fires, map]);
+
+    return null;
+}
+
 // puts the fire on the map, moves the map to it and opens its popup
 function FireMarker({ fire }: { fire: FireSpot }) {
     const map = useMap();
@@ -91,6 +122,7 @@ interface FireMapProps {
     center: [number, number];
     fire?: FireSpot | null;
     fires?: FireDetection[]; // fires from "Search this area"
+    countryFires?: FireDetection[]; // fires from "Search by country and dates", drawn as dots
     onViewChange?: (view: MapView) => void; // reports the visible area
     feature: Feature | null;
     highlighted: boolean;
@@ -184,6 +216,7 @@ function FireMap({
     center,
     fire,
     fires = [],
+    countryFires = [],
     onViewChange,
     feature,
     highlighted,
@@ -208,6 +241,7 @@ function FireMap({
             <ViewReporter onViewChange={onViewChange} />
 
             {fire && <FireMarker fire={fire} />}
+            <FireDots fires={countryFires} />
 
             <TileLayer
                 url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"

@@ -4,7 +4,7 @@ import FireMap, { type FireSpot, type MapView } from "../components/Map";
 import CountryDropdown from "../components/CountryFilter";
 import DateRangeFilter from "../components/DateRangeFilter";
 import type { CountryOption } from "../data/countries";
-import { getCountryFeature } from "../data/countryShapes";
+import { getCountryAt, getCountryFeature } from "../data/countryShapes";
 import {
     getFireDetections,
     getFiresInArea,
@@ -35,9 +35,11 @@ function MapPage() {
 
     // search by country and dates ("Apply")
     const [status, setStatus] = useState<Status>("idle");
+    const [countryFires, setCountryFires] = useState<FireDetection[]>([]); // drawn as small dots
     const abortRef = useRef<AbortController | null>(null);
 
-    // search by map view ("Search this area"): all dates, ignores the filters above
+    // search by map view ("Search this area"): all dates, ignores the filters above;
+    // it searches the country under the centre of the view
     const [view, setView] = useState<MapView | null>(null);
     const [fires, setFires] = useState<FireDetection[]>([]);
     const [areaStatus, setAreaStatus] = useState<AreaStatus>("idle");
@@ -65,7 +67,16 @@ function MapPage() {
         [selectedCountry]
     );
 
-    const areaReady = view !== null && view.heightKm <= MAX_AREA_KM;
+    const zoomedIn = view !== null && view.heightKm <= MAX_AREA_KM;
+
+    // the API searches one country, so we find the country under the centre of the view
+    // (only when zoomed in enough, so the check does not run while the whole world is visible)
+    const areaCountry = useMemo(() => {
+        if (!view || view.heightKm > MAX_AREA_KM) return null;
+        return getCountryAt((view.north + view.south) / 2, (view.west + view.east) / 2);
+    }, [view]);
+
+    const areaReady = zoomedIn && areaCountry !== null;
 
     const handleCountryChange = (country: CountryOption | null) => {
         setSelectedCountry(country);
@@ -87,16 +98,17 @@ function MapPage() {
         abortRef.current = controller;
 
         setStatus("loading");
+        setCountryFires([]); // the new search replaces the old dots
         getFireDetections(
             {
                 start: range.start,
                 end: range.end,
-                countryCode: selectedCountry.code,
+                countryCode: selectedCountry.value, // the API wants the 2-letter code ("BG")
             },
             controller.signal
         )
-            .then(() => {
-                // TODO: the loaded rows will be drawn on the map here
+            .then((rows) => {
+                setCountryFires(rows);
                 setStatus("loaded");
             })
             .catch((e: Error) => {
@@ -105,7 +117,7 @@ function MapPage() {
     };
 
     const handleSearchArea = () => {
-        if (!view || view.heightKm > MAX_AREA_KM) return;
+        if (!view || view.heightKm > MAX_AREA_KM || !areaCountry) return;
 
         areaAbortRef.current?.abort();
         const controller = new AbortController();
@@ -118,6 +130,7 @@ function MapPage() {
                 south: view.south,
                 west: view.west,
                 east: view.east,
+                countryCode: areaCountry.code, // 2-letter code ("BG") of the country under the centre
             },
             controller.signal
         )
@@ -137,8 +150,11 @@ function MapPage() {
 
     const handleClearMap = () => {
         areaAbortRef.current?.abort();
+        abortRef.current?.abort();
         setFires([]);
+        setCountryFires([]);
         setAreaStatus("idle");
+        setStatus("idle");
     };
 
     return (
@@ -178,7 +194,10 @@ function MapPage() {
                         {!selectedCountry
                             ? "Select a country to load fire detections."
                             : "Maximum range: 1 month, from 2001 onwards. Changing one date adjusts the other automatically."}
-                        {status === "loaded" && " Loaded!"}
+                        {status === "loaded" &&
+                            (countryFires.length > 0
+                                ? ` Loaded ${countryFires.length.toLocaleString()} fires.`
+                                : " No fires found in this period.")}
                         {status === "error" && " Could not load detections."}
                     </p>
                 </section>
@@ -195,9 +214,11 @@ function MapPage() {
                             onClick={handleSearchArea}
                             disabled={!areaReady || areaStatus === "loading"}
                             title={
-                                !areaReady
+                                !zoomedIn
                                     ? `Zoom in until the view is ${MAX_AREA_KM} km tall or less`
-                                    : undefined
+                                    : !areaCountry
+                                      ? "Move the centre of the map over a country"
+                                      : undefined
                             }
                         >
                             {areaStatus === "loading" ? "Searching..." : "Search this area"}
@@ -206,7 +227,7 @@ function MapPage() {
                         <button
                             className="map-apply map-clear"
                             onClick={handleClearMap}
-                            disabled={fires.length === 0}
+                            disabled={fires.length === 0 && countryFires.length === 0}
                         >
                             Clear map
                         </button>
@@ -216,7 +237,11 @@ function MapPage() {
                         Finds fires of all time inside the visible part of the map.
                         The country and dates above are not used.
                         {view && ` Current view height: ${formatKm(view.heightKm)}.`}
-                        {!areaReady && ` Zoom in until it is ${MAX_AREA_KM} km or less.`}
+                        {!zoomedIn && ` Zoom in until it is ${MAX_AREA_KM} km or less.`}
+                        {zoomedIn &&
+                            (areaCountry
+                                ? ` Searching in: ${areaCountry.name}.`
+                                : " Move the centre of the map over a country.")}
                         {areaStatus === "loaded" && " Loaded!"}
                         {areaStatus === "empty" && " No fires found in this area."}
                         {areaStatus === "error" && " Could not load fires."}
@@ -229,6 +254,7 @@ function MapPage() {
                     center={center}
                     fire={fire}
                     fires={fires}
+                    countryFires={countryFires}
                     onViewChange={setView}
                     feature={feature}
                     highlighted={highlighted}

@@ -2,11 +2,10 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import Combobox, { type Option } from "../components/Combobox";
 import StatsChart, { type ChartKind, type Series } from "../components/StatsChart";
-import { compareYears, getMonthly } from "../data/api";
+import { compareYears, getInstruments, getMonthly, getTopFires, type Fire, type InstrumentRow } from "../data/api";
 import countries from "../data/countries";
 import { fireTypes, type FireType } from "../data/fireTypes";
 import type { MonthlyRow } from "../data/mockData";
-import { getTopFires, type Fire } from "../data/mockFires";
 import { STAT_TYPES, getStatData, type StatType } from "../data/statData";
 
 const FROM = 2001;
@@ -79,18 +78,37 @@ function Statistics() {
     const [types, setTypes] = useState<FireType[]>(["vegetation"]);
     // what the API sent for the "per month in one year" and "compare two years" views,
     // together with the choices it belongs to (so an old answer is never shown for new choices)
-    const [apiResult, setApiResult] = useState<{ key: string; rows: MonthlyRow[]; error: string | null } | null>(null);
+    // ("MODIS vs VIIRS" fills instrumentRows instead of rows)
+    const [apiResult, setApiResult] = useState<{
+        key: string;
+        rows: MonthlyRow[];
+        instrumentRows: InstrumentRow[];
+        error: string | null;
+    } | null>(null);
     // the bar the user clicked: the biggest fires of that month (or year) are listed under the chart
-    const [picked, setPicked] = useState<{ country: string; year: number; month: number | null } | null>(null);
-    const [fires, setFires] = useState<Fire[]>([]);
+    const [picked, setPicked] = useState<{
+        country: string;
+        stat: StatType;
+        year: number;
+        month: number | null;
+        instrument: "modis" | "viirs" | null; // the MODIS or VIIRS bar of "MODIS vs VIIRS"
+    } | null>(null);
+    // the hottest fires the API sent for the clicked bar, together with the choices they belong to
+    const [fireResult, setFireResult] = useState<{ key: string; fires: Fire[]; error: string | null } | null>(null);
     const [openFire, setOpenFire] = useState<string | null>(null); // id of the fire whose details are shown
 
     // the pie chart always shows the 12 months of one year
     const isPie = kind === "pie";
-    // "Number of fires over time" is the original page; the other statistics show one chart
+    // "Number of fires over time" and "MODIS vs VIIRS" come from the API; the other statistics show one demo chart
     const statType = STAT_TYPES.find((t) => t.value === stat)!;
-    const extra = stat === "fires-over-time" ? null : getStatData(stat, country, `${FROM}-01-01`, `${TO}-12-31`);
-    const shownView = extra ? "stat" : isPie ? "month" : view;
+    const isSatellite = stat === "satellite";
+    const extra =
+        stat === "fires-over-time" || isSatellite
+            ? null
+            : getStatData(stat, country, `${FROM}-01-01`, `${TO}-12-31`);
+    const shownView = extra ? "stat" : isSatellite ? "satellite" : isPie ? "month" : view;
+    // views that show the months of one chosen year
+    const oneYear = shownView === "month" || shownView === "satellite";
 
     function chooseStat(value: string) {
         const next = STAT_TYPES.find((t) => t.value === value);
@@ -103,16 +121,17 @@ function Statistics() {
     // the API wants the two-letter code ("BG"), the page keeps the three-letter one ("BGR")
     const countryCode2 = countries.find((c) => c.code === country)?.value;
 
-    // the month and compare views get their numbers from the API
-    const usesApi = (shownView === "month" || shownView === "compare") && !!countryCode2 && types.length > 0;
+    // the month, compare and MODIS vs VIIRS views get their numbers from the API
+    const usesApi = shownView !== "stat" && !!countryCode2 && types.length > 0;
     const requestKey =
-        shownView === "month"
-            ? `month|${countryCode2}|${monthYear}|${types.join(",")}`
-            : `compare|${countryCode2}|${yearA}|${yearB}|${types.join(",")}`;
+        shownView === "compare"
+            ? `compare|${countryCode2}|${yearA}|${yearB}|${types.join(",")}`
+            : `${shownView}|${countryCode2}|${monthYear}|${types.join(",")}`;
     const apiDone = apiResult?.key === requestKey;
     const loading = usesApi && !apiDone;
     const apiError = apiDone ? apiResult.error : null;
     const yearRows = apiDone ? apiResult.rows : [];
+    const instrumentRows = apiDone ? apiResult.instrumentRows : [];
 
     function toggleType(type: FireType) {
         setTypes(types.includes(type) ? types.filter((t) => t !== type) : [...types, type]);
@@ -122,13 +141,19 @@ function Statistics() {
     useEffect(() => {
         if (!usesApi || !countryCode2) return;
         let cancelled = false;
-        const request =
-            shownView === "month"
-                ? getMonthly(countryCode2, Number(monthYear), types)
-                : compareYears(countryCode2, Number(yearA), Number(yearB), types);
+        const request: Promise<{ rows: MonthlyRow[]; instrumentRows: InstrumentRow[] }> =
+            shownView === "satellite"
+                ? getInstruments(countryCode2, Number(monthYear), types).then((instrumentRows) => ({
+                      rows: [],
+                      instrumentRows,
+                  }))
+                : (shownView === "month"
+                      ? getMonthly(countryCode2, Number(monthYear), types)
+                      : compareYears(countryCode2, Number(yearA), Number(yearB), types)
+                  ).then((rows) => ({ rows, instrumentRows: [] }));
         request
-            .then((rows) => {
-                if (!cancelled) setApiResult({ key: requestKey, rows, error: null });
+            .then((result) => {
+                if (!cancelled) setApiResult({ key: requestKey, ...result, error: null });
             })
             .catch((error: unknown) => {
                 console.error(error);
@@ -136,6 +161,7 @@ function Statistics() {
                     setApiResult({
                         key: requestKey,
                         rows: [],
+                        instrumentRows: [],
                         error: "The numbers could not be loaded. Is the API running?",
                     });
                 }
@@ -146,28 +172,47 @@ function Statistics() {
     }, [usesApi, requestKey, shownView, countryCode2, monthYear, yearA, yearB, types]);
 
     // the list only belongs to the country it was opened for, and only to the bar chart
-    const period = picked && picked.country === country && kind === "bar" && !extra ? picked : null;
+    const period =
+        picked && picked.country === country && picked.stat === stat && kind === "bar" && !extra ? picked : null;
     const periodYear = period?.year;
     const periodMonth = period?.month;
+    const periodInstrument = period?.instrument ?? null;
+
+    // the list of the hottest fires comes from the API too
+    const firesKey =
+        period && countryCode2
+            ? `${countryCode2}|${periodYear}|${periodMonth}|${types.join(",")}|${periodInstrument}`
+            : null;
+    const firesDone = firesKey !== null && fireResult?.key === firesKey;
+    const fires = firesDone ? fireResult.fires : [];
+    const firesError = firesDone ? fireResult.error : null;
+    const firesLoading = firesKey !== null && !firesDone;
 
     useEffect(() => {
-        if (periodYear === undefined || periodMonth === undefined) return;
+        if (firesKey === null || !countryCode2 || periodYear === undefined || periodMonth === undefined) return;
         let cancelled = false;
-        getTopFires(country, periodYear, periodMonth, types).then((result) => {
-            if (!cancelled) setFires(result);
-        });
+        getTopFires(countryCode2, periodYear, periodMonth, types, periodInstrument)
+            .then((result) => {
+                if (!cancelled) setFireResult({ key: firesKey, fires: result, error: null });
+            })
+            .catch((error: unknown) => {
+                console.error(error);
+                if (!cancelled) {
+                    setFireResult({ key: firesKey, fires: [], error: "The fires could not be loaded. Is the API running?" });
+                }
+            });
         return () => {
             cancelled = true;
         };
-    }, [country, periodYear, periodMonth, types]);
+    }, [firesKey, countryCode2, periodYear, periodMonth, types, periodInstrument]);
 
-    // a click on a bar: which year (and month) does it stand for?
+    // a click on a bar: which year (and month, and instrument in "MODIS vs VIIRS") does it stand for?
     function pickBar(index: number, seriesIndex: number) {
-        const year = Number(shownView === "month" ? monthYear : seriesIndex === 0 ? yearA : yearB);
+        const year = Number(oneYear ? monthYear : seriesIndex === 0 ? yearA : yearB);
         const month = index + 1;
-        setFires([]);
+        const instrument = shownView === "satellite" ? (seriesIndex === 0 ? "modis" : "viirs") : null;
         setOpenFire(null);
-        setPicked({ country, year, month });
+        setPicked({ country, stat, year, month, instrument });
     }
 
     const typeNames = fireTypes.filter((t) => types.includes(t.value)).map((t) => t.label);
@@ -197,6 +242,31 @@ function Statistics() {
         const e = extremes(labels, values);
         if (e && labels.length > 1) {
             sentence = `The highest value is ${e.most.name} (${fmt(e.most.value)}) and the lowest is ${e.least.name} (${fmt(e.least.value)}).`;
+        }
+    } else if (shownView === "satellite") {
+        // one bar (or line) per instrument for each month; the pie shows the share of each instrument in the year
+        const modis = MONTHS.map((_, i) => instrumentRows.find((r) => r.month === i + 1)?.modis ?? null);
+        const viirs = MONTHS.map((_, i) => instrumentRows.find((r) => r.month === i + 1)?.viirs ?? null);
+        const totalModis = modis.reduce<number>((s, v) => s + (v ?? 0), 0);
+        const totalViirs = viirs.reduce<number>((s, v) => s + (v ?? 0), 0);
+        if (isPie) {
+            labels = ["MODIS", "VIIRS"];
+            series = [{ name: countryName, values: [totalModis, totalViirs] }];
+            title = `Share of MODIS and VIIRS detections in ${countryName}, ${monthYear}`;
+        } else {
+            labels = MONTHS;
+            series = [
+                { name: "MODIS", values: modis },
+                { name: "VIIRS", values: viirs },
+            ];
+            title = `MODIS vs VIIRS hotspots per month in ${countryName}, ${monthYear}`;
+        }
+        yTitle = "Hotspots per month";
+
+        const total = totalModis + totalViirs;
+        if (total > 0) {
+            const share = Math.round((totalViirs / total) * 100);
+            sentence = `In ${monthYear}, VIIRS detected ${fmt(totalViirs)} hotspots (${share}%) and MODIS ${fmt(totalModis)} (${100 - share}%).`;
         }
     } else if (shownView === "month") {
         labels = MONTHS;
@@ -256,7 +326,7 @@ function Statistics() {
 
     // saves the numbers of the diagram as a CSV file
     function downloadCsv() {
-        const firstColumn = shownView === "stat" ? "Label" : "Month";
+        const firstColumn = shownView === "stat" ? "Label" : isSatellite && isPie ? "Instrument" : "Month";
         const lines = [[firstColumn, ...series.map((s) => s.name)].join(",")];
         labels.forEach((label, i) => {
             lines.push([label, ...series.map((s) => s.values[i] ?? "")].join(","));
@@ -300,6 +370,20 @@ function Statistics() {
         if (e) monthGlance = { total, busiest: e.most, quietest: e.least, average: Math.round(total / 12) };
     }
 
+    // in the MODIS vs VIIRS view, the key numbers compare the two instruments in the chosen year
+    let satelliteGlance: { modis: number; viirs: number; viirsShare: number | null; busiest: string } | null = null;
+    if (shownView === "satellite" && apiDone && !apiError) {
+        const modis = instrumentRows.reduce((s, r) => s + r.modis, 0);
+        const viirs = instrumentRows.reduce((s, r) => s + r.viirs, 0);
+        const both = instrumentRows.map((r) => r.modis + r.viirs);
+        satelliteGlance = {
+            modis,
+            viirs,
+            viirsShare: modis + viirs > 0 ? Math.round((viirs / (modis + viirs)) * 100) : null,
+            busiest: extremes(FULL_MONTHS, both)?.most.name ?? "n/a",
+        };
+    }
+
     const noTypes = !extra && types.length === 0;
     const marksHighest = !isPie && series.length === 1;
 
@@ -334,7 +418,7 @@ function Statistics() {
                             <Combobox id="stat" options={statOptions} value={stat} onChange={chooseStat} />
                         </div>
 
-                        {!extra && !isPie && (
+                        {!extra && !isPie && !isSatellite && (
                             <div className="field">
                                 <label htmlFor="data">Data</label>
                                 <Combobox id="data" options={dataOptions} value={view} onChange={setView} />
@@ -368,7 +452,7 @@ function Statistics() {
                             </>
                         )}
 
-                        {shownView === "month" && (
+                        {oneYear && (
                             <div className="field">
                                 <label htmlFor="year">Year</label>
                                 <Combobox
@@ -441,6 +525,34 @@ function Statistics() {
                                         <p className="small">
                                             the busiest month in {yearB} (in {yearA}: {compareGlance.peakA})
                                         </p>
+                                    </div>
+                                </div>
+                            </section>
+                        )}
+
+                        {satelliteGlance && (
+                            <section aria-label={`Key numbers for ${countryName}`}>
+                                <h3 className="key-title">
+                                    {countryName} at a glance, {monthYear}
+                                </h3>
+                                <div className="key-numbers">
+                                    <div className="key-number">
+                                        <p className="big">{fmt(satelliteGlance.modis)}</p>
+                                        <p className="small">hotspots seen by MODIS</p>
+                                    </div>
+                                    <div className="key-number">
+                                        <p className="big">{fmt(satelliteGlance.viirs)}</p>
+                                        <p className="small">hotspots seen by VIIRS</p>
+                                    </div>
+                                    <div className="key-number">
+                                        <p className="big">
+                                            {satelliteGlance.viirsShare === null ? "n/a" : `${satelliteGlance.viirsShare}%`}
+                                        </p>
+                                        <p className="small">of all detections came from VIIRS</p>
+                                    </div>
+                                    <div className="key-number">
+                                        <p className="big">{satelliteGlance.busiest}</p>
+                                        <p className="small">the busiest month (both instruments)</p>
                                     </div>
                                 </div>
                             </section>
@@ -540,8 +652,10 @@ function Statistics() {
 
                         {period && (
                             <DetailedStats
-                                title={`Detailed stats: ${fires.length || 25} biggest fires in ${countryName}, ${period.month ? FULL_MONTHS[period.month - 1] + " " : ""}${period.year}`}
+                                title={`Detailed stats: ${fires.length || 25} hottest ${period.instrument ? period.instrument.toUpperCase() + " " : ""}fires in ${countryName}, ${period.month ? FULL_MONTHS[period.month - 1] + " " : ""}${period.year}`}
                                 fires={fires}
+                                loading={firesLoading}
+                                error={firesError}
                                 openId={openFire}
                                 onOpen={setOpenFire}
                                 onClose={() => setPicked(null)}
@@ -561,16 +675,29 @@ function formatTime(hhmm: number): string {
     return `${text.slice(0, 2)}:${text.slice(2)}`;
 }
 
+// the map page puts a pin on exactly these coordinates (see MapPage: /map?lat=..&lon=..)
+function mapLink(f: Fire): string {
+    const params = new URLSearchParams({
+        lat: String(f.latitude),
+        lon: String(f.longitude),
+        date: `${f.acq_date} ${formatTime(f.acq_time)} UTC`,
+    });
+    if (f.temperature !== null) params.set("temp", String(f.temperature));
+    return `/map?${params}`;
+}
+
 interface DetailedStatsProps {
     title: string;
     fires: Fire[];
+    loading: boolean;
+    error: string | null;
     openId: string | null;
     onOpen: (id: string | null) => void;
     onClose: () => void;
 }
 
 // the "detailed stats" list of the biggest fires; after a click on the coordinates only that fire stays, with more details
-function DetailedStats({ title, fires, openId, onOpen, onClose }: DetailedStatsProps) {
+function DetailedStats({ title, fires, loading, error, openId, onOpen, onClose }: DetailedStatsProps) {
     const open = fires.find((f) => f.id === openId) ?? null;
     const shown = open ? [open] : fires;
     const coords = (f: Fire) => `${f.latitude.toFixed(3)}, ${f.longitude.toFixed(3)}`;
@@ -590,7 +717,14 @@ function DetailedStats({ title, fires, openId, onOpen, onClose }: DetailedStatsP
                     </button>
                 </div>
             </div>
-            {fires.length === 0 ? (
+            {loading ? (
+                <div className="stats-loading" role="status">
+                    <span className="spinner" aria-hidden="true" />
+                    <p>Finding the hottest fires…</p>
+                </div>
+            ) : error ? (
+                <p className="counted" role="alert">{error}</p>
+            ) : fires.length === 0 ? (
                 <p className="counted">No fires to show.</p>
             ) : (
                 <>
@@ -613,7 +747,7 @@ function DetailedStats({ title, fires, openId, onOpen, onClose }: DetailedStatsP
                                             {coords(f)}
                                         </button>
                                     </td>
-                                    <td>{f.brightness}</td>
+                                    <td>{f.temperature ?? "n/a"}</td>
                                 </tr>
                             ))}
                         </tbody>
@@ -625,11 +759,21 @@ function DetailedStats({ title, fires, openId, onOpen, onClose }: DetailedStatsP
                             <div><dt>Time, UTC (acq_time)</dt><dd>{formatTime(open.acq_time)}</dd></div>
                             <div><dt>Latitude</dt><dd>{open.latitude}</dd></div>
                             <div><dt>Longitude</dt><dd>{open.longitude}</dd></div>
-                            <div><dt>Brightness</dt><dd>{open.brightness} K</dd></div>
-                            <div><dt>Brightness, channel 31 (bright_t31)</dt><dd>{open.bright_t31} K</dd></div>
+                            {open.brightness !== null && (
+                                <div><dt>Brightness</dt><dd>{open.brightness} K</dd></div>
+                            )}
+                            {open.bright_t31 !== null && (
+                                <div><dt>Brightness, channel 31 (bright_t31)</dt><dd>{open.bright_t31} K</dd></div>
+                            )}
+                            {open.bright_ti4 !== null && (
+                                <div><dt>Brightness, channel I-4 (bright_ti4)</dt><dd>{open.bright_ti4} K</dd></div>
+                            )}
+                            {open.bright_ti5 !== null && (
+                                <div><dt>Brightness, channel I-5 (bright_ti5)</dt><dd>{open.bright_ti5} K</dd></div>
+                            )}
                             <div><dt>Fire power (frp)</dt><dd>{fmt(open.frp)} MW</dd></div>
                             <div><dt>Pixel size (scan x track)</dt><dd>{open.scan} x {open.track} km</dd></div>
-                            <div><dt>Confidence</dt><dd>{open.confidence}%</dd></div>
+                            <div><dt>Confidence</dt><dd>{open.confidence}</dd></div>
                             <div><dt>Satellite</dt><dd>{open.satellite}</dd></div>
                             <div><dt>Instrument</dt><dd>{open.instrument}</dd></div>
                             <div><dt>Seen in the</dt><dd>{open.daynight === "D" ? "Day" : "Night"}</dd></div>
@@ -638,7 +782,7 @@ function DetailedStats({ title, fires, openId, onOpen, onClose }: DetailedStatsP
                                 <dt>Map</dt>
                                 <dd>
                                     <Link
-                                        to={`/map?lat=${open.latitude}&lon=${open.longitude}&date=${open.acq_date}&temp=${open.brightness}`}
+                                        to={mapLink(open)}
                                     >
                                         Show on the map
                                     </Link>
