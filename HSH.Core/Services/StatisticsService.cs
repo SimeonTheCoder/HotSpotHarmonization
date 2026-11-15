@@ -40,6 +40,8 @@ public interface IStatisticsService
     /// Null if the country is unknown.
     /// </summary>
     Task<IReadOnlyList<TopFireDto>?> GetTopFiresAsync(string countryCode, int year, int? month, IReadOnlyCollection<FireType> types, Instrument? instrument, int limit, CancellationToken ct = default);
+
+    Task<DetectionConfidenceDTO> GetDetectionConfidence(string countryCode, int year);
 }
 
 public class StatisticsService(
@@ -299,5 +301,18 @@ public class StatisticsService(
             );
 
         return new DayNightDTO(dayFires, nightFires);
+    }
+
+    public async Task<DetectionConfidenceDTO> GetDetectionConfidence(string countryCode, int year)
+    {
+        int? countryId = await countries.FindIdAsync(countryCode);
+        if (countryId == null)
+            throw new ArgumentException("Invalid country!");
+
+        int low = await db.FireData.AsNoTracking().Where(f => f.CountryId == countryId).CountAsync(f => f.ConfidenceLevel == ConfidenceLevel.Low || f.ConfidencePercent <= 30);
+        int nominal = await db.FireData.AsNoTracking().Where(f => f.CountryId == countryId).CountAsync(f => f.ConfidenceLevel == ConfidenceLevel.Nominal || (f.ConfidencePercent > 30 && f.ConfidencePercent <= 80));
+        int high = await db.FireData.AsNoTracking().Where(f => f.CountryId == countryId).CountAsync(f => f.ConfidenceLevel == ConfidenceLevel.High || f.ConfidencePercent > 80); 
+
+        return new DetectionConfidenceDTO(low, nominal, high);
     }
 }

@@ -149,6 +149,26 @@ public class StatisticsController(IStatisticsService statistics) : ControllerBas
         return Ok(dto);
     }
 
+    [HttpGet("{country}/confidence")]
+    public async Task<IActionResult> GetConfidence(string country, [FromQuery] int year)
+    {
+        if (!ValidYear(year))
+            return YearProblem(nameof(year));
+        
+        DetectionConfidenceDTO dto;
+
+        try
+        {
+            dto = await statistics.GetDetectionConfidence(country, year);
+        }
+        catch(ArgumentException ae)
+        {
+            return BadRequest(ae.Message);
+        }
+
+        return Ok(dto);
+    }
+
     private static bool ValidYear(int year) => year is >= MinYear and <= MaxYear;
 
     private ObjectResult YearProblem(string name) =>
