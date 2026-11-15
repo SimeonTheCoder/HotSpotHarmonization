@@ -5,6 +5,7 @@ import countries from "../data/countries";
 import { fireTypes, type FireType } from "../data/fireTypes";
 import { getKeyNumbers } from "../data/keyNumbers";
 import { getCountryMonthly, type MonthlyRow } from "../data/mockData";
+import { STAT_TYPES, getStatData, type StatType } from "../data/statData";
 
 const FROM = 2001;
 const TO = 2025;
@@ -16,6 +17,8 @@ const FULL_MONTHS = ["January", "February", "March", "April", "May", "June", "Ju
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 const countryOptions: Option[] = countries.map((c) => ({ value: c.code, label: c.label }));
+
+const statOptions: Option[] = STAT_TYPES.map((t) => ({ value: t.value, label: t.label }));
 
 const typeOptions: Option[] = [
     { value: "line", label: "Line chart" },
@@ -68,6 +71,7 @@ function saveFile(url: string, fileName: string) {
 
 function Statistics() {
     const [country, setCountry] = useState("BGR");
+    const [stat, setStat] = useState<StatType>("fires-over-time");
     const [kind, setKind] = useState("line");
     const [view, setView] = useState("year"); // "year", "month" or "compare"
     const [monthYear, setMonthYear] = useState("2025"); // used when view is "month"
@@ -78,7 +82,17 @@ function Statistics() {
 
     // the pie chart always shows the 12 months of one year
     const isPie = kind === "pie";
-    const shownView = isPie ? "month" : view;
+    // "Number of fires over time" is the original page; the other statistics show one chart
+    const statType = STAT_TYPES.find((t) => t.value === stat)!;
+    const extra = stat === "fires-over-time" ? null : getStatData(stat, country, `${FROM}-01-01`, `${TO}-12-31`);
+    const shownView = extra ? "stat" : isPie ? "month" : view;
+
+    function chooseStat(value: string) {
+        const next = STAT_TYPES.find((t) => t.value === value);
+        if (!next) return;
+        setStat(next.value);
+        setKind(next.chart); // start with the chart that fits this statistic
+    }
 
     const countryName = countries.find((c) => c.code === country)?.label ?? "";
 
@@ -115,7 +129,18 @@ function Statistics() {
     let yTitle: string;
     let sentence = ""; // one sentence that says what the chart shows
 
-    if (shownView === "year") {
+    if (extra) {
+        labels = extra.points.map((p) => String(p.label));
+        const values = extra.points.map((p) => Number(p.value));
+        series = [{ name: extra.series[0].name, values }];
+        title = `${statType.label} in ${countryName}, ${FROM} to ${TO}`;
+        yTitle = statType.unit;
+
+        const e = extremes(labels, values);
+        if (e && labels.length > 1) {
+            sentence = `The highest value is ${e.most.name} (${fmt(e.most.value)}) and the lowest is ${e.least.name} (${fmt(e.least.value)}).`;
+        }
+    } else if (shownView === "year") {
         labels = years;
         // add the months of every year to get one number per year
         const values = years.map((year) =>
@@ -187,7 +212,7 @@ function Statistics() {
 
     // saves the numbers of the diagram as a CSV file
     function downloadCsv() {
-        const firstColumn = shownView === "year" ? "Year" : "Month";
+        const firstColumn = shownView === "stat" ? "Label" : shownView === "year" ? "Year" : "Month";
         const lines = [[firstColumn, ...series.map((s) => s.name)].join(",")];
         labels.forEach((label, i) => {
             lines.push([label, ...series.map((s) => s.values[i] ?? "")].join(","));
@@ -218,7 +243,7 @@ function Statistics() {
         };
     }
 
-    const noTypes = types.length === 0;
+    const noTypes = !extra && types.length === 0;
     const marksHighest = !isPie && series.length === 1;
 
     return (
@@ -247,7 +272,12 @@ function Statistics() {
                             />
                         </div>
 
-                        {!isPie && (
+                        <div className="field">
+                            <label htmlFor="stat">Statistic</label>
+                            <Combobox id="stat" options={statOptions} value={stat} onChange={chooseStat} />
+                        </div>
+
+                        {!extra && !isPie && (
                             <div className="field">
                                 <label htmlFor="data">Data</label>
                                 <Combobox id="data" options={dataOptions} value={view} onChange={setView} />
@@ -300,6 +330,7 @@ function Statistics() {
                         </div>
                     </div>
 
+                    {!extra && (
                     <fieldset className="types">
                         <legend>Type of fire</legend>
                         <div className="types-row">
@@ -315,6 +346,7 @@ function Statistics() {
                             ))}
                         </div>
                     </fieldset>
+                    )}
                 </div>
             </div>
 
@@ -357,7 +389,7 @@ function Statistics() {
                             </section>
                         )}
 
-                        {!compareGlance && numbers && (
+                        {!extra && !compareGlance && numbers && (
                             <section aria-label={`Key numbers for ${countryName}`}>
                                 <h3 className="key-title">
                                     {countryName} at a glance, {FROM} to {TO}
@@ -388,11 +420,13 @@ function Statistics() {
                         <div className="stats-result">
                             <h3>{title}</h3>
                             {sentence && <p className="sentence">{sentence}</p>}
-                            <p className="counted">Counted: {typeNames.join(", ").toLowerCase()}.</p>
+                            <p className="counted">
+                                {extra ? "Demo numbers, all types of fire." : `Counted: ${typeNames.join(", ").toLowerCase()}.`}
+                            </p>
 
                             <div
                                 className="stats-chart"
-                                key={`${kind}-${shownView}-${country}-${types.join("")}`}
+                                key={`${kind}-${shownView}-${stat}-${country}-${types.join("")}`}
                             >
                                 <StatsChart
                                     kind={kind as ChartKind}
