@@ -152,28 +152,135 @@ body {
   font-size: 32px;
 }
 
+/* the two search panels above the map */
+.map-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.map-panel {
+  padding: 16px 20px;
+  background: var(--white);
+  border: 1px solid var(--black);
+  border-radius: 12px;
+}
+
+.map-panel-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 12px;
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+/* small label that tells whether the filters are used */
+.map-badge {
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--yellow);
+  color: var(--black);
+  font-family: "IBM Plex Sans", Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.6;
+}
+.map-badge-all { background: var(--dark-red); color: var(--white); }
+
+/* toolbar: country, dates, buttons */
 .map-toolbar {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 16px;
-  font-weight: 600;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.map-field { display: flex; flex-direction: column; gap: 6px; }
+.map-field label { font-weight: 600; font-size: 14px; line-height: 1; }
+
+/* every control shares the same size, font and border */
+.map-toolbar select,
+.map-toolbar input[type="date"],
+.map-apply {
+  box-sizing: border-box;
+  height: 44px;
+  padding: 0 14px;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1;
+  border: 1px solid var(--black);
+  border-radius: 8px;
+}
+
+.map-toolbar select,
+.map-toolbar input[type="date"] {
+  min-width: 170px;
+  color: var(--black);
+  background: var(--white);
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 .map-toolbar select {
-  padding: 8px 14px;
-  font: inherit;
-  color: var(--black);
-  background: var(--white);
-  border: 2px solid var(--black);
-  border-radius: 8px;
   cursor: pointer;
+  padding-right: 36px;
+  background-image: linear-gradient(45deg, transparent 50%, var(--black) 50%),
+                    linear-gradient(135deg, var(--black) 50%, transparent 50%);
+  background-position: calc(100% - 20px) 50%, calc(100% - 14px) 50%;
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
 }
-.map-toolbar select:hover { border-color: var(--orange); }
-.map-toolbar select:focus-visible {
-  outline: 3px solid var(--yellow);
+
+.map-toolbar input[type="date"]::-webkit-calendar-picker-indicator { cursor: pointer; }
+
+.map-toolbar select:hover,
+.map-toolbar input[type="date"]:hover { border-color: var(--orange-red); }
+
+.map-toolbar select:focus-visible,
+.map-toolbar input[type="date"]:focus-visible,
+.map-apply:focus-visible {
+  outline: 3px solid var(--burgundy);
   outline-offset: 2px;
 }
+
+.map-apply {
+  min-width: 110px;
+  background: var(--black);
+  color: var(--white);
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+.map-apply:hover:not(:disabled) {
+  transform: scale(1.04);
+  background: var(--orange);
+  color: var(--black);
+}
+.map-apply:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* the secondary button (Clear map) */
+.map-clear { background: var(--white); color: var(--black); }
+.map-clear:hover:not(:disabled) { background: var(--dark-red); color: var(--white); }
+
+.map-hint { margin: 0 0 8px; font-size: 14px; color: var(--burgundy); }
+.map-panel .map-hint:last-child { margin-bottom: 0; }
+
+/* live information about the visible area */
+.map-view-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 8px 0 0;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: var(--grey);
+  font-size: 14px;
+}
+.map-view-info.ready { background: var(--yellow); }
 
 /* the map sits in a card, like the cards on the Home page */
 .map-wrapper {
@@ -197,11 +304,18 @@ body {
   .map-wrapper { height: 420px; }
 }
 
+@media (max-width: 700px) {
+  .map-field,
+  .map-toolbar select,
+  .map-toolbar input[type="date"],
+  .map-apply { width: 100%; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
-  .nav-btn, .card, .goto a, .photo { transition: none; }
+  .nav-btn, .card, .goto a, .photo, .map-apply { transition: none; }
   .reveal { opacity: 1; transform: none; transition: none; }
-  .nav-btn:hover, .card:hover, .goto a:hover, .photo:hover { transform: none; }
+  .nav-btn:hover, .card:hover, .goto a:hover, .photo:hover, .map-apply:hover { transform: none; }
 }
 
 
@@ -451,80 +565,3 @@ body {
 
 /* the hint above the bar chart */
 .stats-result .chart-hint { margin: 0 0 12px; font-size: 17px; font-weight: 700; }
-
-/* ---------- Map toolbar ---------- */
-.map-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 16px;
-  margin-bottom: 8px;
-}
-
-.map-field { display: flex; flex-direction: column; gap: 6px; }
-.map-field label { font-weight: 700; font-size: 14px; line-height: 1; }
-
-/* every control shares the same size, font and border */
-.map-toolbar select,
-.map-toolbar input[type="date"],
-.map-apply {
-  box-sizing: border-box;
-  height: 44px;
-  padding: 0 14px;
-  font: inherit;
-  font-size: 16px;
-  line-height: 1;
-  border: 2px solid var(--black);
-  border-radius: 8px;
-}
-
-.map-toolbar select,
-.map-toolbar input[type="date"] {
-  min-width: 170px;
-  color: var(--black);
-  background: var(--white);
-  -webkit-appearance: none;
-  appearance: none;
-}
-
-.map-toolbar select {
-  cursor: pointer;
-  padding-right: 36px;
-  background-image: linear-gradient(45deg, transparent 50%, var(--black) 50%),
-                    linear-gradient(135deg, var(--black) 50%, transparent 50%);
-  background-position: calc(100% - 20px) 50%, calc(100% - 14px) 50%;
-  background-size: 6px 6px, 6px 6px;
-  background-repeat: no-repeat;
-}
-
-.map-toolbar input[type="date"]::-webkit-calendar-picker-indicator { cursor: pointer; }
-
-.map-toolbar select:hover,
-.map-toolbar input[type="date"]:hover { border-color: var(--orange); }
-
-.map-toolbar select:focus-visible,
-.map-toolbar input[type="date"]:focus-visible,
-.map-apply:focus-visible {
-  outline: 3px solid var(--yellow);
-  outline-offset: 2px;
-}
-
-.map-apply {
-  min-width: 110px;
-  background: var(--black);
-  color: var(--white);
-  font-weight: 700;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-}
-.map-apply:hover:not(:disabled) { background: var(--orange); color: var(--black); border-color: var(--black); }
-.map-apply:disabled { opacity: 0.6; cursor: wait; }
-
-.map-hint { margin: 0 0 16px; font-size: 14px; color: var(--burgundy); }
-
-@media (max-width: 700px) {
-  .map-field,
-  .map-toolbar select,
-  .map-toolbar input[type="date"],
-  .map-apply { width: 100%; }
-}
