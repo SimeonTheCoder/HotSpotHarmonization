@@ -10,6 +10,7 @@ import {
     getFiresInArea,
     type FireDetection,
 } from "../data/mapFireData";
+import { loadHeatmap } from "../data/heatmap";
 import { addMonths, today } from "../utils/dates";
 
 const DEFAULT_CENTER: [number, number] = [42.7, 25.3];
@@ -17,6 +18,7 @@ const MAX_AREA_KM = 10; // the view must be this tall (north to south) or less
 
 type Status = "idle" | "loading" | "loaded" | "error";
 type AreaStatus = "idle" | "loading" | "loaded" | "empty" | "error";
+type HeatmapStatus = "idle" | "loading" | "generating" | "loaded" | "error";
 
 const formatKm = (km: number) =>
     km < 100 ? `${km.toFixed(1)} km` : `${Math.round(km).toLocaleString()} km`;
@@ -43,6 +45,37 @@ function MapPage() {
     const [fires, setFires] = useState<FireDetection[]>([]);
     const [areaStatus, setAreaStatus] = useState<AreaStatus>("idle");
     const areaAbortRef = useRef<AbortController | null>(null);
+
+    // world heatmap overlay: off by default, loaded the first time it is switched on, then kept
+    const [heatmapOn, setHeatmapOn] = useState(false);
+    const [heatmapUrl, setHeatmapUrl] = useState<string | null>(null);
+    const [heatmapStatus, setHeatmapStatus] = useState<HeatmapStatus>("idle");
+    const heatmapAbortRef = useRef<AbortController | null>(null);
+
+    const handleHeatmapToggle = (on: boolean) => {
+        setHeatmapOn(on);
+        if (!on) {
+            heatmapAbortRef.current?.abort(); // stop waiting (the server keeps building it for next time)
+            if (!heatmapUrl) setHeatmapStatus("idle");
+            return;
+        }
+        if (heatmapUrl) return; // already loaded
+
+        const controller = new AbortController();
+        heatmapAbortRef.current = controller;
+        setHeatmapStatus("loading");
+        loadHeatmap(controller.signal, () => setHeatmapStatus("generating"))
+            .then((url) => {
+                setHeatmapUrl(url);
+                setHeatmapStatus("loaded");
+            })
+            .catch((e: Error) => {
+                if (e.name !== "AbortError") {
+                    console.error(e);
+                    setHeatmapStatus("error");
+                }
+            });
+    };
 
     // /map?lat=..&lon=.. shows one fire with the fire icon (the link comes from the detailed stats)
     const [params] = useSearchParams();
@@ -230,6 +263,40 @@ function MapPage() {
                         {areaStatus === "error" && " Could not load fires."}
                     </p>
                 </section>
+
+                <section className="map-panel">
+                    <h3 className="map-panel-title">
+                        World heatmap ·
+                        <span className="map-badge map-badge-all"> All time · Ignores filters</span>
+                    </h3>
+
+                    <div className="map-toolbar heatmap-toolbar">
+                        <label className="check">
+                            <input
+                                type="checkbox"
+                                checked={heatmapOn}
+                                onChange={(e) => handleHeatmapToggle(e.target.checked)}
+                            />
+                            Show the fire density of the whole world
+                        </label>
+
+                        <div className="heatmap-legend" aria-hidden="true">
+                            <span>Fewer fires</span>
+                            <span className="heatmap-legend-bar" />
+                            <span>More fires</span>
+                        </div>
+                    </div>
+
+                    <p className="map-hint">
+                        Each square is coloured by how many fires were detected in it; the more fires, the
+                        stronger the colour.
+                        {heatmapOn && heatmapStatus === "loading" && " Loading..."}
+                        {heatmapOn &&
+                            heatmapStatus === "generating" &&
+                            " The server is building the heatmap for the first time, this can take a few minutes..."}
+                        {heatmapOn && heatmapStatus === "error" && " Could not load the heatmap."}
+                    </p>
+                </section>
             </div>
 
             <div className="map-wrapper">
@@ -238,6 +305,7 @@ function MapPage() {
                     fire={fire}
                     fires={fires}
                     countryFires={countryFires}
+                    heatmapUrl={heatmapOn ? heatmapUrl : null}
                     onViewChange={setView}
                     feature={feature}
                     highlighted={highlighted}

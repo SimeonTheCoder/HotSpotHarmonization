@@ -267,6 +267,19 @@ body {
 .map-clear:hover:not(:disabled) { background: var(--dark-red); color: var(--white); }
 
 .map-hint { margin: 0 0 8px; font-size: 14px; color: var(--burgundy); }
+
+/* world heatmap toggle and its colour legend (same colours as HeatmapGrid on the server) */
+.heatmap-toolbar { align-items: center; justify-content: space-between; }
+.heatmap-legend { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.heatmap-legend-bar {
+  width: 140px;
+  height: 12px;
+  border: 1px solid var(--black);
+  border-radius: 3px;
+  background: linear-gradient(to right, rgba(255, 225, 80, 0.25), rgba(255, 138, 0, 0.6), rgb(196, 20, 40));
+}
+/* keep the squares sharp when the map is zoomed in */
+.leaflet-image-layer.heatmap-overlay { image-rendering: pixelated; }
 .map-panel .map-hint:last-child { margin-bottom: 0; }
 
 /* live information about the visible area */

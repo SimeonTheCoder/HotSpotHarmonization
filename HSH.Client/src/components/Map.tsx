@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import L from "leaflet";
 import {
     GeoJSON,
+    ImageOverlay,
     MapContainer,
     Marker,
     Popup,
@@ -12,6 +13,7 @@ import {
 } from "react-leaflet";
 import type { Feature } from "geojson";
 import type { FireDetection } from "../data/mapFireData";
+import { HEATMAP_BOUNDS } from "../data/heatmap";
 
 // one fire that is shown with the fire icon (opened from the statistics page)
 export interface FireSpot {
@@ -123,6 +125,7 @@ interface FireMapProps {
     fire?: FireSpot | null;
     fires?: FireDetection[]; // fires from "Search this area"
     countryFires?: FireDetection[]; // fires from "Search by country and dates", drawn as dots
+    heatmapUrl?: string | null; // the world heatmap picture; null hides it
     onViewChange?: (view: MapView) => void; // reports the visible area
     feature: Feature | null;
     highlighted: boolean;
@@ -217,6 +220,7 @@ function FireMap({
     fire,
     fires = [],
     countryFires = [],
+    heatmapUrl = null,
     onViewChange,
     feature,
     highlighted,
@@ -248,6 +252,16 @@ function FireMap({
                 maxZoom={18}
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             />
+
+            {/* the world heatmap: one coloured square per area, more opaque where there were more fires */}
+            {heatmapUrl && (
+                <ImageOverlay
+                    url={heatmapUrl}
+                    bounds={HEATMAP_BOUNDS}
+                    className="heatmap-overlay"
+                    interactive={false}
+                />
+            )}
 
             {fires.map((f) => (
                 <Marker

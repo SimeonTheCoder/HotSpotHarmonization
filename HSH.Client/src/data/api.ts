@@ -6,7 +6,7 @@
 import type { FireType } from "./fireTypes";
 import type { MonthlyRow } from "./mockData";
 
-const API_URL: string =
+export const API_URL: string =
     import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? "http://localhost:65238" : window.location.origin);
 
 async function get<T>(path: string, params: Record<string, string | number>): Promise<T> {
