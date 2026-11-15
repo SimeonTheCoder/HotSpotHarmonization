@@ -3,7 +3,6 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace HSH.Data.Models
 {
-    [Table("Trees")]
     public class TreeBoundary
     {
         [Key]

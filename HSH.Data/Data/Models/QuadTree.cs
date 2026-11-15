@@ -4,7 +4,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HSH.Data.Models
 {
-    [Table("quad_tree")]
     public class QuadTree
     {
         [Key]
@@ -14,16 +13,18 @@ namespace HSH.Data.Models
         [Required]
         public ushort CellId { get; set; }
 
-        [Required]
-        public long FireId { get; set; } // Reference to fire in FireData table
+        public long? FireId { get; set; } // Reference to fire in FireData table
 
         [ForeignKey(nameof(FireId))]
         public virtual FireData Fire { get; set; } = null!;
 
         [Required]
-        public int TreeId { get; set; } // Could store either ID (string for flexibility)
+        public int TreeId { get; set; }
 
         [Required]
-        public int CountryId {get; set;}
+        public int CountryId { get; set; }
+
+        [ForeignKey(nameof(CountryId))]
+        public virtual Country Country { get; set; } = null!;
     }
 }

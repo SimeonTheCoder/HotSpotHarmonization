@@ -110,7 +110,7 @@ namespace HSH.Data.Migrations
                     b.HasIndex("CountryName")
                         .IsUnique();
 
-                    b.ToTable("countries");
+                    b.ToTable("Countries");
                 });
 
             modelBuilder.Entity("HSH.Data.Models.FireData", b =>
@@ -201,7 +201,7 @@ namespace HSH.Data.Migrations
                     b.Property<int>("CountryId")
                         .HasColumnType("int");
 
-                    b.Property<long>("FireId")
+                    b.Property<long?>("FireId")
                         .HasColumnType("bigint");
 
                     b.Property<int>("TreeId")
@@ -211,9 +211,11 @@ namespace HSH.Data.Migrations
 
                     b.HasIndex("CellId");
 
+                    b.HasIndex("CountryId");
+
                     b.HasIndex("FireId");
 
-                    b.ToTable("quad_tree");
+                    b.ToTable("QuadTrees");
                 });
 
             modelBuilder.Entity("HSH.Data.Models.TreeBoundary", b =>
@@ -241,7 +243,7 @@ namespace HSH.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Trees");
+                    b.ToTable("TreeBoundaries");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>
@@ -396,11 +398,17 @@ namespace HSH.Data.Migrations
 
             modelBuilder.Entity("HSH.Data.Models.QuadTree", b =>
                 {
-                    b.HasOne("HSH.Data.Models.FireData", "Fire")
+                    b.HasOne("HSH.Data.Models.Country", "Country")
                         .WithMany()
-                        .HasForeignKey("FireId")
+                        .HasForeignKey("CountryId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.HasOne("HSH.Data.Models.FireData", "Fire")
+                        .WithMany()
+                        .HasForeignKey("FireId");
+
+                    b.Navigation("Country");
 
                     b.Navigation("Fire");
                 });
