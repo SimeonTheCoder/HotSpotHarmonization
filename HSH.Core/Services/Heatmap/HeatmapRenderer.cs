@@ -12,8 +12,8 @@ public sealed class HeatmapGrid
     /// <summary>Web Mercator stops at this latitude; it is also the top and bottom of the image.</summary>
     public const double MaxLat = 85.05112878;
 
-    public const int Columns = 720; // 0.5 degree of longitude per square
-    public const int Rows = 720;    // same number of rows: the Mercator world is a square
+    public const int Columns = 720 * 8; // 0.5 degree of longitude per square
+    public const int Rows = 720 * 8;    // same number of rows: the Mercator world is a square
 
     /// <summary>Pixels per square side in the image (the browser scales it up with "pixelated" rendering).</summary>
     public const int SquarePixels = 2;
