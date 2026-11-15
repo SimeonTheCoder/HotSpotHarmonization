@@ -35,6 +35,7 @@ function MapPage() {
 
     // search by country and dates ("Apply")
     const [status, setStatus] = useState<Status>("idle");
+    const [countryFires, setCountryFires] = useState<FireDetection[]>([]); // drawn as small dots
     const abortRef = useRef<AbortController | null>(null);
 
     // search by map view ("Search this area"): all dates, ignores the filters above
@@ -87,16 +88,17 @@ function MapPage() {
         abortRef.current = controller;
 
         setStatus("loading");
+        setCountryFires([]); // the new search replaces the old dots
         getFireDetections(
             {
                 start: range.start,
                 end: range.end,
-                countryCode: selectedCountry.code,
+                countryCode: selectedCountry.value, // the API wants the 2-letter code ("BG")
             },
             controller.signal
         )
-            .then(() => {
-                // TODO: the loaded rows will be drawn on the map here
+            .then((rows) => {
+                setCountryFires(rows);
                 setStatus("loaded");
             })
             .catch((e: Error) => {
@@ -137,8 +139,11 @@ function MapPage() {
 
     const handleClearMap = () => {
         areaAbortRef.current?.abort();
+        abortRef.current?.abort();
         setFires([]);
+        setCountryFires([]);
         setAreaStatus("idle");
+        setStatus("idle");
     };
 
     return (
@@ -178,7 +183,10 @@ function MapPage() {
                         {!selectedCountry
                             ? "Select a country to load fire detections."
                             : "Maximum range: 1 month, from 2001 onwards. Changing one date adjusts the other automatically."}
-                        {status === "loaded" && " Loaded!"}
+                        {status === "loaded" &&
+                            (countryFires.length > 0
+                                ? ` Loaded ${countryFires.length.toLocaleString()} fires.`
+                                : " No fires found in this period.")}
                         {status === "error" && " Could not load detections."}
                     </p>
                 </section>
@@ -206,7 +214,7 @@ function MapPage() {
                         <button
                             className="map-apply map-clear"
                             onClick={handleClearMap}
-                            disabled={fires.length === 0}
+                            disabled={fires.length === 0 && countryFires.length === 0}
                         >
                             Clear map
                         </button>
@@ -229,6 +237,7 @@ function MapPage() {
                     center={center}
                     fire={fire}
                     fires={fires}
+                    countryFires={countryFires}
                     onViewChange={setView}
                     feature={feature}
                     highlighted={highlighted}

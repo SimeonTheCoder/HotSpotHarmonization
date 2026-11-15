@@ -6,32 +6,34 @@ export interface FireDetection {
 
 /* ---------- Search by country and dates ---------- */
 
+// same address logic as api.ts: VITE_API_URL, else "dotnet run" during "npm run dev", else the page's own server
+const API_URL: string =
+    import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? "http://localhost:65238" : window.location.origin);
+
 interface FireQuery {
-    start: string;        // "YYYY-MM-DD"
-    end: string;          // "YYYY-MM-DD"
-    countryCode?: string; // 3-letter code
+    start: string;       // "YYYY-MM-DD"
+    end: string;         // "YYYY-MM-DD", at most 31 days after start
+    countryCode: string; // 2-letter ISO code, for example "BG" (countries.ts "value")
 }
 
+// GET /api/map/{countryCode}?start=..&end=.. returns [{ latitude, longitude }] of every fire in that period
 export async function getFireDetections(
     query: FireQuery,
     signal?: AbortSignal,
 ): Promise<FireDetection[]> {
-    // REAL VERSION (when the endpoint exists):
-    // const params = new URLSearchParams({ start: query.start, end: query.end });
-    // if (query.countryCode) params.set("country", query.countryCode);
-    // const res = await fetch(`/api/detections?${params}`, { signal });
-    // if (!res.ok) throw new Error(`API error ${res.status}`);
-    // return res.json();
+    const url = new URL(`/api/map/${encodeURIComponent(query.countryCode)}`, API_URL);
+    url.searchParams.set("start", query.start);
+    url.searchParams.set("end", query.end);
 
-    // MOCK
-    console.log("Requesting detections", query);
-    await new Promise((resolve) => setTimeout(resolve, 400));
-    signal?.throwIfAborted();
+    const res = await fetch(url, { signal });
+    if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`);
+    const rows = (await res.json()) as { latitude: number; longitude: number }[];
 
-    return Array.from({ length: 200 }, (_, i) => ({
-        id: String(i),
-        latitude: -60 + Math.random() * 130,
-        longitude: -180 + Math.random() * 360,
+    // the API sends no id, so the fires are numbered (the map needs a unique key per fire)
+    return rows.map((r, i) => ({
+        id: `country-${i}`,
+        latitude: r.latitude,
+        longitude: r.longitude,
     }));
 }
 
