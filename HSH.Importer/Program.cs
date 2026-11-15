@@ -121,35 +121,105 @@ async Task TreeMode(string folder)
             if (db.TreeBoundaries.Count(t => t.TreeId == countryId) != 0)
             {
                 Console.WriteLine($"BSP Tree for {file.CountryKey} already exists; skipping");
-                continue;
+            }
+            else
+            {
+                string[] lines = File.ReadAllLines(file.FullPath);
+
+                for (int i = 0; i < lines.Length; i++)
+                {
+                    string[] tokens = lines[i].Split(",");
+
+                    int id = i;
+                    float boundary = float.Parse(tokens[0]);
+                    int leftId = int.Parse(tokens[1]);
+                    int rightId = int.Parse(tokens[2]);
+
+                    await db.AddAsync(
+                        new TreeBoundary()
+                        {
+                            TreeId = countryId,
+                            BoundaryId = id,
+                            Value = boundary,
+                            LeftChildId = leftId,
+                            RightChildId = rightId,
+                        }
+                    );
+                }
+
+                await db.SaveChangesAsync();
+                Console.WriteLine("Done!");
             }
 
-            string[] lines = File.ReadAllLines(file.FullPath);
+            FireData[] dbFireData = await db
+                .FireData.Where(fd => fd.CountryId == countryId)
+                .ToArrayAsync();
 
-            for (int i = 0; i < lines.Length; i++)
+            TreeBoundary[] boundaries = await db
+                .TreeBoundaries.Where(b => b.TreeId == countryId)
+                .ToArrayAsync();
+
+            boundaries.Sort((a, b) => a.BoundaryId.CompareTo(b.BoundaryId));
+
+            for (int i = 0; i < dbFireData.Length; i++)
             {
-                string[] tokens = lines[i].Split(",");
+                var fire = dbFireData[i];
 
-                int id = i;
-                float boundary = float.Parse(tokens[0]);
-                int leftId = int.Parse(tokens[1]);
-                int rightId = int.Parse(tokens[2]);
+                int pointer = 0;
+                ushort result = 0;
 
-                await db.AddAsync(
-                    new TreeBoundary()
+                for (int depth = 0; depth < 16; depth++)
+                {
+                    result *= 2;
+
+                    TreeBoundary currBoundary = boundaries[pointer];
+
+                    if (
+                        (depth % 2 == 0 && fire.Longitude >= currBoundary.Value)
+                        || (depth % 2 == 1 && fire.Latitude >= currBoundary.Value)
+                    )
                     {
+                        result += 1;
+                        pointer = currBoundary.RightChildId;
+                    }
+                    else
+                    {
+                        pointer = currBoundary.LeftChildId;
+                    }
+
+                    if (pointer == -1)
+                    {
+                        break;
+                    }
+                }
+
+                await db.QuadTrees.AddAsync(
+                    new()
+                    {
+                        CellId = result,
+                        Fire = fire,
                         TreeId = countryId,
-                        BoundaryId = id,
-                        Value = boundary,
-                        LeftChildId = leftId,
-                        RightChildId = rightId,
+                        Country = fire.Country,
                     }
                 );
             }
+
+            System.Console.WriteLine(countryId);
+            await db.SaveChangesAsync();
+            Console.WriteLine("Cell Ids - Done!");
         }
 
+        await db.FireData.ForEachAsync(
+            (fire) =>
+            {
+                if (fire.TreeId == null)
+                    fire.TreeId = fire.CountryId;
+            }
+        );
+
         await db.SaveChangesAsync();
-        Console.WriteLine("Done!");
+
+        await db.SaveChangesAsync();
     }
 }
 
