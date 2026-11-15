@@ -2,7 +2,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
-namespace HSH.Data.Models
+namespace HSH.Data.Data.Models
 {
     [Table("countries")]
     public class Country
