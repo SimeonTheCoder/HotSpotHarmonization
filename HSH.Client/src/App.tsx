@@ -3,7 +3,6 @@ import Header from "./components/Header";
 import Home from "./pages/Home";
 import MapPage from "./pages/MapPage";
 import Statistics from "./pages/Statistics";
-import Predictions from "./pages/Predictions";
 import "./App.css";
 
 function App() {
@@ -15,7 +14,6 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/statistics" element={<Statistics />} />
           <Route path="/map" element={<MapPage />} />
-          <Route path="/predictions" element={<Predictions />} />
         </Routes>
       </main>
       <footer className="footer">

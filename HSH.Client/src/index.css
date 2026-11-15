@@ -63,7 +63,6 @@ body {
 .nav-home:hover { background: var(--yellow); color: var(--black); }
 .nav-stats:hover { background: var(--orange); color: var(--black); }
 .nav-map:hover { background: var(--orange-red); color: var(--black); }
-.nav-pred:hover { background: var(--dark-red); color: var(--white); }
 
 /* ---------- Main (top of the home page) ---------- */
 .main { background: var(--black); color: var(--white); }

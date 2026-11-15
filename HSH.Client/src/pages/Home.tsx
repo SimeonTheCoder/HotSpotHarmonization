@@ -215,10 +215,6 @@ function Home() {
               <Link to="/map">Map</Link>
               <p>See fire activity country by country on a world map.</p>
             </li>
-            <li>
-              <Link to="/predictions">Predictions</Link>
-              <p>Look ahead at expected fire activity.</p>
-            </li>
           </ul>
         </div>
       </section>
