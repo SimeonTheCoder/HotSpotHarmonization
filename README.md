@@ -1,6 +1,6 @@
 # Harmonized Burning Activity Calendar
 
-A web application that visualizes worldwide active-fire hotspots on an **interactive  map**, combining the long historical record of **MODIS** (early 2000s onward) with the continuity and finer spatial detail of **VIIRS** into one consistent time series.
+A web application that visualizes worldwide active-fire hotspots on an **interactive map**, combining the long historical record of **MODIS** (early 2000s onward) with the continuity and finer spatial detail of **VIIRS** into one consistent time series.
 
 ---
 
@@ -23,7 +23,7 @@ A web application that visualizes worldwide active-fire hotspots on an **interac
 
 ## Overview
 
-Active-fire hotspot data comes from multiple satellite sensors, each with different resolutions, overpass times and detection characteristics. This makes it hard to compare fire activity across decades: a jump in hotspot counts may reflect a sensor change rather than a real change in burning.
+Active-fire hotspot data comes from multiple satellite sensors,  each with different resolutions, overpass times and detection characteristics. This makes it hard to compare fire activity across decades: a jump in hotspot counts may reflect a sensor change rather than a real change in burning.
 
 This project:
 
@@ -66,12 +66,12 @@ Build the visual tool that consumes the harmonized data.
 
 The schema is built around **one large `Data` table** holding every hotspot, plus a **quadtree table** and a **trees table** for fast spatial lookup.
 
-| Table | Purpose |
-|-------|---------|
-| **Data** | Main table with every harmonized hotspot (`id`/`fireId`, `treeId`, `countryId`, `lat`, `long`, `sat`, `pSize`, `temperature` (K), `type`, `date`). |
-| **countries** | Country lookup: `id` (`countryId`), `countryName`, `countryCode` (ISO 3166-1). |
-| **Trees** | Quadtree node definitions: `Id` (PK), `treeId`, `BoundaryId`, `Value`. |
-| **quad tree** | Maps a cell to its fires: `Id`, `cellId`, `fireId`, `tree/countryId`. |
+| Table         | Purpose                                                                                                                                            |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Data**      | Main table with every harmonized hotspot (`id`/`fireId`, `treeId`, `countryId`, `lat`, `long`, `sat`, `pSize`, `temperature` (K), `type`, `date`). |
+| **countries** | Country lookup: `id` (`countryId`), `countryName`, `countryCode` (ISO 3166-1).                                                                     |
+| **Trees**     | Quadtree node definitions: `Id` (PK), `treeId`, `BoundaryId`, `Value`.                                                                             |
+| **quad tree** | Maps a cell to its fires: `Id`, `cellId`, `fireId`, `tree/countryId`.                                                                              |
 
 **Relations**
 
@@ -89,16 +89,13 @@ The schema is built around **one large `Data` table** holding every hotspot, plu
 
 The app resolves a location to its data through the quadtree rather than scanning the whole table:
 
-``
-Coords → GET country (API) → Tree  → Cell ID → Country → Data
-``
+`Coords → GET country (API) → Tree  → Cell ID → Country → Data`
 
 1. The user provides coordinates (or selects a region).
 2. The country is resolved through an API call.
 3. The coordinates are mapped to a quadtree.
 4. The resulting **Cell ID** is used to find the matching country/cell.
 5. The related hotspots are fetched from the **Data** table.
-
 
 ## Getting Started
 
