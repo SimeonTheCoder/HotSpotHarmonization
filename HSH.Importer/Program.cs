@@ -449,7 +449,7 @@ static class FireRowParser
                 values[14] = float.Parse(p[cFrp], Inv);
                 values[15] = float.Parse(p[cVer], Inv);
                 values[16] = (byte)ParseDayNight(p[cDn]);
-                values[17] = byte.Parse(p[cType], Inv);
+                values[17] = (byte)ParseFireType(p[cType]);
             }
             catch (Exception ex)
                 when (ex is FormatException or IndexOutOfRangeException or OverflowException)
@@ -513,4 +513,9 @@ static class FireRowParser
             "N" => DayNight.Night,
             _ => throw new FormatException($"Unknown daynight '{s}'"),
         };
+
+    private static FireType ParseFireType(string s) =>
+        byte.TryParse(s, NumberStyles.Integer, Inv, out byte b) && Enum.IsDefined((FireType)b)
+            ? (FireType)b
+            : throw new FormatException($"Unknown type '{s}'");
 }
