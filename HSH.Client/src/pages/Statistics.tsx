@@ -14,8 +14,6 @@ import {
     type DayNight,
     type Fire,
     type InstrumentRow,
-    type FireResponseDto,
-    getAllFiresByCountry
 } from "../data/api";
 import countries from "../data/countries";
 import { fireTypes, type FireType } from "../data/fireTypes";
@@ -82,9 +80,6 @@ function saveFile(url: string, fileName: string) {
 }
 
 function Statistics() {
-    const [allCountryFires, setAllCountryFires] = useState<FireResponseDto[]>([]);
-    const [countryFiresLoading, setCountryFiresLoading] = useState(false);
-    const [countryFiresError, setCountryFiresError] = useState<string | null>(null);
     const [country, setCountry] = useState("BGR");
     const [stat, setStat] = useState<StatType>("fires-over-time");
     const [kind, setKind] = useState("bar");
@@ -178,33 +173,6 @@ function Statistics() {
         setTypes(types.includes(type) ? types.filter((t) => t !== type) : [...types, type]);
     }
 
-    
-    useEffect(() => {
-        if (!countryName) return;
-
-        let cancelled = false;
-        setCountryFiresLoading(true);
-        setCountryFiresError(null);
-
-        getAllFiresByCountry(countryName)
-            .then((data) => {
-                if (!cancelled) {
-                    setAllCountryFires(data);
-                    setCountryFiresLoading(false);
-                }
-            })
-            .catch((err) => {
-                console.error(err);
-                if (!cancelled) {
-                    setCountryFiresError("Could not load country fire records.");
-                    setCountryFiresLoading(false);
-                }
-            });
-
-        return () => {
-            cancelled = true;
-        };
-    }, [countryName]);
 
     // ask the API for the chosen year(s); until the answer arrives the page shows the loading animation
     useEffect(() => {
