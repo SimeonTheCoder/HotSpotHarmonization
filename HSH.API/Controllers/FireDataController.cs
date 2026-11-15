@@ -128,18 +128,6 @@ namespace HSH.API.Controllers
             return Ok(fires);
         }
 
-        // GET: api/firedata/country-name/France
-        [HttpGet("country-name/{countryName}")]
-        public async Task<ActionResult<IEnumerable<FireData>>> GetFiresByCountryName(string countryName)
-        {
-            var fires = await _context.FireData
-                .Include(f => f.Country)
-                .Where(f => f.Country != null && f.Country.CountryName.ToLower() == countryName.ToLower())
-                .ToListAsync();
-
-            return Ok(fires);
-        }
-
         // GET: api/firedata/country-name/France/count
         [HttpGet("country-name/{countryName}/count")]
         public async Task<ActionResult> GetFireCountByCountryName(string countryName)
