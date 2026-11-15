@@ -34,6 +34,12 @@ public interface IStatisticsService
     );
 
     Task<DayNightDTO> GetDayNight(string countryCode, int year);
+    
+    /// <summary>
+    /// The hottest fires of one country in one month (or the whole year when month is null), hottest first.
+    /// Null if the country is unknown.
+    /// </summary>
+    Task<IReadOnlyList<TopFireDto>?> GetTopFiresAsync(string countryCode, int year, int? month, IReadOnlyCollection<FireType> types, Instrument? instrument, int limit, CancellationToken ct = default);
 }
 
 public class StatisticsService(
@@ -143,6 +149,83 @@ public class StatisticsService(
             )
         )!;
     }
+
+    public async Task<IReadOnlyList<TopFireDto>?> GetTopFiresAsync(
+        string countryCode, int year, int? month, IReadOnlyCollection<FireType> types, Instrument? instrument, int limit,
+        CancellationToken ct = default)
+    {
+        int? countryId = await countries.FindIdAsync(countryCode, ct);
+        if (countryId is null) return null;
+
+        var typeArray = types.Distinct().Order().ToArray();
+        string key = $"top-fires:{countryId}:{year}:{month}:{string.Join(',', typeArray)}:{instrument}:{limit}";
+
+        return (await cache.GetOrCreateAsync(key, async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(12);
+
+            var from = month is null ? new DateTime(year, 1, 1) : new DateTime(year, month.Value, 1);
+            var to = month is null ? from.AddYears(1) : from.AddMonths(1);
+            var found = new List<TopFireDto>();
+
+            // Each Id range of the country gives its own top N; the best N of all ranges are kept.
+            foreach (var block in (await blocks.GetBlocksAsync(countryId.Value, ct)).Where(b => b.Overlaps(year)))
+            {
+                var query = db.FireData.AsNoTracking()
+                    .Where(f => f.Id >= block.StartId && f.Id <= block.EndId)
+                    .Where(f => f.CountryId == countryId.Value)
+                    .Where(f => f.AcquiredAt >= from && f.AcquiredAt < to)
+                    .Where(f => typeArray.Contains(f.Type));
+                if (instrument is not null) query = query.Where(f => f.Instrument == instrument.Value);
+
+                var rows = await query
+                    // MODIS has "brightness", VIIRS has "bright_ti4": both are the fire pixel's temperature
+                    .OrderByDescending(f => f.Brightness ?? f.BrightTi4)
+                    .ThenByDescending(f => f.Frp)
+                    .Take(limit)
+                    .ToListAsync(ct);
+
+                found.AddRange(rows.Select(f => new TopFireDto
+                {
+                    Id = f.Id,
+                    Latitude = f.Latitude,
+                    Longitude = f.Longitude,
+                    AcquiredAt = f.AcquiredAt,
+                    Satellite = SatelliteName(f.Satellite),
+                    Instrument = f.Instrument == Instrument.Viirs ? "VIIRS" : "MODIS",
+                    Temperature = f.Brightness ?? f.BrightTi4,
+                    Brightness = f.Brightness,
+                    BrightT31 = f.BrightT31,
+                    BrightTi4 = f.BrightTi4,
+                    BrightTi5 = f.BrightTi5,
+                    Scan = f.Scan,
+                    Track = f.Track,
+                    Frp = f.Frp,
+                    ConfidencePercent = f.ConfidencePercent,
+                    ConfidenceLevel = f.ConfidenceLevel?.ToString().ToLowerInvariant(),
+                    Version = f.Version,
+                    DayNight = f.DayNight == DayNight.Day ? "D" : "N",
+                    Type = (int)f.Type,
+                }));
+            }
+
+            return (IReadOnlyList<TopFireDto>)found
+                .OrderByDescending(f => f.Temperature ?? float.MinValue)
+                .ThenByDescending(f => f.Frp)
+                .Take(limit)
+                .ToList();
+        }))!;
+    }
+
+    private static string SatelliteName(Satellite satellite) => satellite switch
+    {
+        Satellite.Terra => "Terra",
+        Satellite.Aqua => "Aqua",
+        Satellite.SuomiNpp => "N",
+        Satellite.Noaa20 => "N20",
+        Satellite.Noaa21 => "N21",
+        _ => satellite.ToString(),
+    };
 
     private async Task<IReadOnlyList<MonthlyRow>> MonthlyForYearAsync(
         int countryId,

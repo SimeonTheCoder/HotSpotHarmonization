@@ -44,38 +44,42 @@ export interface AreaQuery {
     south: number;
     west: number;
     east: number;
+    countryCode: string; // 2-letter ISO code of the country under the centre of the view (the API searches one country's tree)
 }
 
-// Searches ALL dates: it ignores the country and the date range filters
+// GET /api/map/{countryCode}/rect?x1=..&y1=..&x2=..&y2=.. returns [{ latitude, longitude }] of all dates.
+// (x1, y1) and (x2, y2) are two opposite corners; x is the LONGITUDE and y the LATITUDE,
+// because the country's tree splits on longitude first (see HSH.Importer).
 export async function getFiresInArea(
     query: AreaQuery,
     signal?: AbortSignal,
 ): Promise<FireDetection[]> {
-    // REAL VERSION (when the endpoint exists):
-    // const params = new URLSearchParams({
-    //     north: query.north.toFixed(5),
-    //     south: query.south.toFixed(5),
-    //     west: query.west.toFixed(5),
-    //     east: query.east.toFixed(5),
-    // });
-    // const res = await fetch(`/api/detections/area?${params}`, { signal });
-    // if (!res.ok) throw new Error(`API error ${res.status}`);
-    // return res.json(); // must contain a unique id per fire
+    const url = new URL(`/api/map/${encodeURIComponent(query.countryCode)}/rect`, API_URL);
+    url.searchParams.set("x1", query.west.toFixed(5)); // bottom-left corner
+    url.searchParams.set("y1", query.south.toFixed(5));
+    url.searchParams.set("x2", query.east.toFixed(5)); // top-right corner
+    url.searchParams.set("y2", query.north.toFixed(5));
 
-    // MOCK: random fires inside the requested box
-    console.log("Requesting fires in area", query);
-    await new Promise((resolve) => setTimeout(resolve, 400));
-    signal?.throwIfAborted();
+    const res = await fetch(url, { signal });
+    if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`);
+    const rows = (await res.json()) as { latitude: number; longitude: number }[];
 
-    return Array.from({ length: 30 }, () => {
-        const latitude =
-            query.south + Math.random() * (query.north - query.south);
-        const longitude =
-            query.west + Math.random() * (query.east - query.west);
-        return {
-            id: `${latitude.toFixed(5)},${longitude.toFixed(5)}`,
-            latitude,
-            longitude,
-        };
-    });
+    return (
+        rows
+            // the API returns every fire of the tree cells that touch the box (cells can be much bigger
+            // than the view), so only the fires really inside the visible area are kept
+            .filter(
+                (r) =>
+                    r.latitude >= query.south &&
+                    r.latitude <= query.north &&
+                    r.longitude >= query.west &&
+                    r.longitude <= query.east,
+            )
+            // the id is the position, so a fire found again by a later search is shown once
+            .map((r) => ({
+                id: `${r.latitude.toFixed(5)},${r.longitude.toFixed(5)}`,
+                latitude: r.latitude,
+                longitude: r.longitude,
+            }))
+    );
 }

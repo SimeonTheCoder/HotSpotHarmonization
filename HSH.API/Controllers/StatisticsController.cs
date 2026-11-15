@@ -1,5 +1,6 @@
 using HSH.Core.DTOs;
 using HSH.Core.Services;
+using HSH.Data.Enums;
 using Microsoft.AspNetCore.Mvc;
 
 namespace HSH.API.Controllers;
@@ -97,6 +98,34 @@ public class StatisticsController(IStatisticsService statistics) : ControllerBas
             return TypeProblem(invalid);
 
         var rows = await statistics.GetInstrumentsAsync(country, year, fireTypes, ct);
+        return rows is null ? CountryNotFound(country) : Ok(rows);
+    }
+
+    // get top 25 hotties
+    [HttpGet("{country}/top-fires")]
+    [ProducesResponseType<IReadOnlyList<TopFireDto>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<IReadOnlyList<TopFireDto>>> GetTopFires(
+        string country, [FromQuery] int year, [FromQuery] int? month, [FromQuery] string? types,
+        [FromQuery] string? instrument, CancellationToken ct, [FromQuery] int limit = 25)
+    {
+        if (!ValidYear(year)) return YearProblem(nameof(year));
+        if (month is < 1 or > 12)
+            return Problem("'month' must be between 1 and 12.", statusCode: StatusCodes.Status400BadRequest);
+        if (limit is < 1 or > 100)
+            return Problem("'limit' must be between 1 and 100.", statusCode: StatusCodes.Status400BadRequest);
+        if (!FireTypeNames.TryParse(types, out var fireTypes, out var invalid)) return TypeProblem(invalid);
+
+        Instrument? parsedInstrument = null;
+        if (!string.IsNullOrWhiteSpace(instrument))
+        {
+            if (!Enum.TryParse<Instrument>(instrument, ignoreCase: true, out var value) || !Enum.IsDefined(value))
+                return Problem($"Unknown instrument '{instrument}'. Use modis or viirs.", statusCode: StatusCodes.Status400BadRequest);
+            parsedInstrument = value;
+        }
+
+        var rows = await statistics.GetTopFiresAsync(country, year, month, fireTypes, parsedInstrument, limit, ct);
         return rows is null ? CountryNotFound(country) : Ok(rows);
     }
 

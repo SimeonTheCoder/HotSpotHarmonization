@@ -4,7 +4,7 @@ import FireMap, { type FireSpot, type MapView } from "../components/Map";
 import CountryDropdown from "../components/CountryFilter";
 import DateRangeFilter from "../components/DateRangeFilter";
 import type { CountryOption } from "../data/countries";
-import { getCountryFeature } from "../data/countryShapes";
+import { getCountryAt, getCountryFeature } from "../data/countryShapes";
 import {
     getFireDetections,
     getFiresInArea,
@@ -38,7 +38,8 @@ function MapPage() {
     const [countryFires, setCountryFires] = useState<FireDetection[]>([]); // drawn as small dots
     const abortRef = useRef<AbortController | null>(null);
 
-    // search by map view ("Search this area"): all dates, ignores the filters above
+    // search by map view ("Search this area"): all dates, ignores the filters above;
+    // it searches the country under the centre of the view
     const [view, setView] = useState<MapView | null>(null);
     const [fires, setFires] = useState<FireDetection[]>([]);
     const [areaStatus, setAreaStatus] = useState<AreaStatus>("idle");
@@ -66,7 +67,16 @@ function MapPage() {
         [selectedCountry]
     );
 
-    const areaReady = view !== null && view.heightKm <= MAX_AREA_KM;
+    const zoomedIn = view !== null && view.heightKm <= MAX_AREA_KM;
+
+    // the API searches one country, so we find the country under the centre of the view
+    // (only when zoomed in enough, so the check does not run while the whole world is visible)
+    const areaCountry = useMemo(() => {
+        if (!view || view.heightKm > MAX_AREA_KM) return null;
+        return getCountryAt((view.north + view.south) / 2, (view.west + view.east) / 2);
+    }, [view]);
+
+    const areaReady = zoomedIn && areaCountry !== null;
 
     const handleCountryChange = (country: CountryOption | null) => {
         setSelectedCountry(country);
@@ -107,7 +117,7 @@ function MapPage() {
     };
 
     const handleSearchArea = () => {
-        if (!view || view.heightKm > MAX_AREA_KM) return;
+        if (!view || view.heightKm > MAX_AREA_KM || !areaCountry) return;
 
         areaAbortRef.current?.abort();
         const controller = new AbortController();
@@ -120,6 +130,7 @@ function MapPage() {
                 south: view.south,
                 west: view.west,
                 east: view.east,
+                countryCode: areaCountry.code, // 2-letter code ("BG") of the country under the centre
             },
             controller.signal
         )
@@ -203,9 +214,11 @@ function MapPage() {
                             onClick={handleSearchArea}
                             disabled={!areaReady || areaStatus === "loading"}
                             title={
-                                !areaReady
+                                !zoomedIn
                                     ? `Zoom in until the view is ${MAX_AREA_KM} km tall or less`
-                                    : undefined
+                                    : !areaCountry
+                                      ? "Move the centre of the map over a country"
+                                      : undefined
                             }
                         >
                             {areaStatus === "loading" ? "Searching..." : "Search this area"}
@@ -224,7 +237,11 @@ function MapPage() {
                         Finds fires of all time inside the visible part of the map.
                         The country and dates above are not used.
                         {view && ` Current view height: ${formatKm(view.heightKm)}.`}
-                        {!areaReady && ` Zoom in until it is ${MAX_AREA_KM} km or less.`}
+                        {!zoomedIn && ` Zoom in until it is ${MAX_AREA_KM} km or less.`}
+                        {zoomedIn &&
+                            (areaCountry
+                                ? ` Searching in: ${areaCountry.name}.`
+                                : " Move the centre of the map over a country.")}
                         {areaStatus === "loaded" && " Loaded!"}
                         {areaStatus === "empty" && " No fires found in this area."}
                         {areaStatus === "error" && " Could not load fires."}
