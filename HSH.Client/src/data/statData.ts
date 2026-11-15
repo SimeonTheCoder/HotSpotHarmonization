@@ -33,8 +33,6 @@ export interface StatResult {
     series: SeriesInfo[];
 }
 
-/* ---------- MOCK DATA: replace getStatData with a real API call later ---------- */
-
 function hash(str: string): number {
     let h = 2166136261;
     for (let i = 0; i < str.length; i++) {
@@ -44,7 +42,6 @@ function hash(str: string): number {
     return h >>> 0;
 }
 
-// small deterministic random generator, so the same inputs give the same chart
 function rng(seed: number) {
     return () => {
         seed |= 0;
@@ -55,7 +52,6 @@ function rng(seed: number) {
     };
 }
 
-// fires peak in summer
 const seasonFactor = (month: number) =>
     0.3 + 1.2 * Math.exp(-Math.pow((month - 7) / 2.2, 2));
 
@@ -75,7 +71,6 @@ export function getStatData(
     const endD = new Date(end);
     const days = Math.round((endD.getTime() - startD.getTime()) / 86400000) + 1;
 
-    // daily fire counts for the range
     const daily: { date: Date; count: number }[] = [];
     for (let i = 0; i < days; i++) {
         const d = new Date(startD);
@@ -87,7 +82,6 @@ export function getStatData(
     }
     const total = daily.reduce((s, d) => s + d.count, 0);
 
-    // time series: by day for short ranges, by month for long ones
     if (type === "fires-over-time" || type === "frp-over-time") {
         const byMonth = days > 60;
         const buckets = new Map<string, number>();
@@ -117,7 +111,6 @@ export function getStatData(
         };
     }
 
-    // categorical splits of the total
     const split = (parts: [string, number][]) =>
         parts.map(([label, share]) => ({
             label,
