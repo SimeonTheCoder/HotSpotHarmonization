@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import Combobox, { type Option } from "../components/Combobox";
 import StatsChart, { type ChartKind, type Series } from "../components/StatsChart";
-import { compareYears, getMonthly } from "../data/api";
+import { compareYears, getInstruments, getMonthly, type InstrumentRow } from "../data/api";
 import countries from "../data/countries";
 import { fireTypes, type FireType } from "../data/fireTypes";
 import type { MonthlyRow } from "../data/mockData";
@@ -79,7 +79,13 @@ function Statistics() {
     const [types, setTypes] = useState<FireType[]>(["vegetation"]);
     // what the API sent for the "per month in one year" and "compare two years" views,
     // together with the choices it belongs to (so an old answer is never shown for new choices)
-    const [apiResult, setApiResult] = useState<{ key: string; rows: MonthlyRow[]; error: string | null } | null>(null);
+    // ("MODIS vs VIIRS" fills instrumentRows instead of rows)
+    const [apiResult, setApiResult] = useState<{
+        key: string;
+        rows: MonthlyRow[];
+        instrumentRows: InstrumentRow[];
+        error: string | null;
+    } | null>(null);
     // the bar the user clicked: the biggest fires of that month (or year) are listed under the chart
     const [picked, setPicked] = useState<{ country: string; year: number; month: number | null } | null>(null);
     const [fires, setFires] = useState<Fire[]>([]);
@@ -87,10 +93,16 @@ function Statistics() {
 
     // the pie chart always shows the 12 months of one year
     const isPie = kind === "pie";
-    // "Number of fires over time" is the original page; the other statistics show one chart
+    // "Number of fires over time" and "MODIS vs VIIRS" come from the API; the other statistics show one demo chart
     const statType = STAT_TYPES.find((t) => t.value === stat)!;
-    const extra = stat === "fires-over-time" ? null : getStatData(stat, country, `${FROM}-01-01`, `${TO}-12-31`);
-    const shownView = extra ? "stat" : isPie ? "month" : view;
+    const isSatellite = stat === "satellite";
+    const extra =
+        stat === "fires-over-time" || isSatellite
+            ? null
+            : getStatData(stat, country, `${FROM}-01-01`, `${TO}-12-31`);
+    const shownView = extra ? "stat" : isSatellite ? "satellite" : isPie ? "month" : view;
+    // views that show the months of one chosen year
+    const oneYear = shownView === "month" || shownView === "satellite";
 
     function chooseStat(value: string) {
         const next = STAT_TYPES.find((t) => t.value === value);
@@ -103,16 +115,17 @@ function Statistics() {
     // the API wants the two-letter code ("BG"), the page keeps the three-letter one ("BGR")
     const countryCode2 = countries.find((c) => c.code === country)?.value;
 
-    // the month and compare views get their numbers from the API
-    const usesApi = (shownView === "month" || shownView === "compare") && !!countryCode2 && types.length > 0;
+    // the month, compare and MODIS vs VIIRS views get their numbers from the API
+    const usesApi = shownView !== "stat" && !!countryCode2 && types.length > 0;
     const requestKey =
-        shownView === "month"
-            ? `month|${countryCode2}|${monthYear}|${types.join(",")}`
-            : `compare|${countryCode2}|${yearA}|${yearB}|${types.join(",")}`;
+        shownView === "compare"
+            ? `compare|${countryCode2}|${yearA}|${yearB}|${types.join(",")}`
+            : `${shownView}|${countryCode2}|${monthYear}|${types.join(",")}`;
     const apiDone = apiResult?.key === requestKey;
     const loading = usesApi && !apiDone;
     const apiError = apiDone ? apiResult.error : null;
     const yearRows = apiDone ? apiResult.rows : [];
+    const instrumentRows = apiDone ? apiResult.instrumentRows : [];
 
     function toggleType(type: FireType) {
         setTypes(types.includes(type) ? types.filter((t) => t !== type) : [...types, type]);
@@ -122,13 +135,19 @@ function Statistics() {
     useEffect(() => {
         if (!usesApi || !countryCode2) return;
         let cancelled = false;
-        const request =
-            shownView === "month"
-                ? getMonthly(countryCode2, Number(monthYear), types)
-                : compareYears(countryCode2, Number(yearA), Number(yearB), types);
+        const request: Promise<{ rows: MonthlyRow[]; instrumentRows: InstrumentRow[] }> =
+            shownView === "satellite"
+                ? getInstruments(countryCode2, Number(monthYear), types).then((instrumentRows) => ({
+                      rows: [],
+                      instrumentRows,
+                  }))
+                : (shownView === "month"
+                      ? getMonthly(countryCode2, Number(monthYear), types)
+                      : compareYears(countryCode2, Number(yearA), Number(yearB), types)
+                  ).then((rows) => ({ rows, instrumentRows: [] }));
         request
-            .then((rows) => {
-                if (!cancelled) setApiResult({ key: requestKey, rows, error: null });
+            .then((result) => {
+                if (!cancelled) setApiResult({ key: requestKey, ...result, error: null });
             })
             .catch((error: unknown) => {
                 console.error(error);
@@ -136,6 +155,7 @@ function Statistics() {
                     setApiResult({
                         key: requestKey,
                         rows: [],
+                        instrumentRows: [],
                         error: "The numbers could not be loaded. Is the API running?",
                     });
                 }
@@ -163,7 +183,7 @@ function Statistics() {
 
     // a click on a bar: which year (and month) does it stand for?
     function pickBar(index: number, seriesIndex: number) {
-        const year = Number(shownView === "month" ? monthYear : seriesIndex === 0 ? yearA : yearB);
+        const year = Number(oneYear ? monthYear : seriesIndex === 0 ? yearA : yearB);
         const month = index + 1;
         setFires([]);
         setOpenFire(null);
@@ -197,6 +217,31 @@ function Statistics() {
         const e = extremes(labels, values);
         if (e && labels.length > 1) {
             sentence = `The highest value is ${e.most.name} (${fmt(e.most.value)}) and the lowest is ${e.least.name} (${fmt(e.least.value)}).`;
+        }
+    } else if (shownView === "satellite") {
+        // one bar (or line) per instrument for each month; the pie shows the share of each instrument in the year
+        const modis = MONTHS.map((_, i) => instrumentRows.find((r) => r.month === i + 1)?.modis ?? null);
+        const viirs = MONTHS.map((_, i) => instrumentRows.find((r) => r.month === i + 1)?.viirs ?? null);
+        const totalModis = modis.reduce<number>((s, v) => s + (v ?? 0), 0);
+        const totalViirs = viirs.reduce<number>((s, v) => s + (v ?? 0), 0);
+        if (isPie) {
+            labels = ["MODIS", "VIIRS"];
+            series = [{ name: countryName, values: [totalModis, totalViirs] }];
+            title = `Share of MODIS and VIIRS detections in ${countryName}, ${monthYear}`;
+        } else {
+            labels = MONTHS;
+            series = [
+                { name: "MODIS", values: modis },
+                { name: "VIIRS", values: viirs },
+            ];
+            title = `MODIS vs VIIRS hotspots per month in ${countryName}, ${monthYear}`;
+        }
+        yTitle = "Hotspots per month";
+
+        const total = totalModis + totalViirs;
+        if (total > 0) {
+            const share = Math.round((totalViirs / total) * 100);
+            sentence = `In ${monthYear}, VIIRS detected ${fmt(totalViirs)} hotspots (${share}%) and MODIS ${fmt(totalModis)} (${100 - share}%).`;
         }
     } else if (shownView === "month") {
         labels = MONTHS;
@@ -256,7 +301,7 @@ function Statistics() {
 
     // saves the numbers of the diagram as a CSV file
     function downloadCsv() {
-        const firstColumn = shownView === "stat" ? "Label" : "Month";
+        const firstColumn = shownView === "stat" ? "Label" : isSatellite && isPie ? "Instrument" : "Month";
         const lines = [[firstColumn, ...series.map((s) => s.name)].join(",")];
         labels.forEach((label, i) => {
             lines.push([label, ...series.map((s) => s.values[i] ?? "")].join(","));
@@ -300,6 +345,20 @@ function Statistics() {
         if (e) monthGlance = { total, busiest: e.most, quietest: e.least, average: Math.round(total / 12) };
     }
 
+    // in the MODIS vs VIIRS view, the key numbers compare the two instruments in the chosen year
+    let satelliteGlance: { modis: number; viirs: number; viirsShare: number | null; busiest: string } | null = null;
+    if (shownView === "satellite" && apiDone && !apiError) {
+        const modis = instrumentRows.reduce((s, r) => s + r.modis, 0);
+        const viirs = instrumentRows.reduce((s, r) => s + r.viirs, 0);
+        const both = instrumentRows.map((r) => r.modis + r.viirs);
+        satelliteGlance = {
+            modis,
+            viirs,
+            viirsShare: modis + viirs > 0 ? Math.round((viirs / (modis + viirs)) * 100) : null,
+            busiest: extremes(FULL_MONTHS, both)?.most.name ?? "n/a",
+        };
+    }
+
     const noTypes = !extra && types.length === 0;
     const marksHighest = !isPie && series.length === 1;
 
@@ -334,7 +393,7 @@ function Statistics() {
                             <Combobox id="stat" options={statOptions} value={stat} onChange={chooseStat} />
                         </div>
 
-                        {!extra && !isPie && (
+                        {!extra && !isPie && !isSatellite && (
                             <div className="field">
                                 <label htmlFor="data">Data</label>
                                 <Combobox id="data" options={dataOptions} value={view} onChange={setView} />
@@ -368,7 +427,7 @@ function Statistics() {
                             </>
                         )}
 
-                        {shownView === "month" && (
+                        {oneYear && (
                             <div className="field">
                                 <label htmlFor="year">Year</label>
                                 <Combobox
@@ -441,6 +500,34 @@ function Statistics() {
                                         <p className="small">
                                             the busiest month in {yearB} (in {yearA}: {compareGlance.peakA})
                                         </p>
+                                    </div>
+                                </div>
+                            </section>
+                        )}
+
+                        {satelliteGlance && (
+                            <section aria-label={`Key numbers for ${countryName}`}>
+                                <h3 className="key-title">
+                                    {countryName} at a glance, {monthYear}
+                                </h3>
+                                <div className="key-numbers">
+                                    <div className="key-number">
+                                        <p className="big">{fmt(satelliteGlance.modis)}</p>
+                                        <p className="small">hotspots seen by MODIS</p>
+                                    </div>
+                                    <div className="key-number">
+                                        <p className="big">{fmt(satelliteGlance.viirs)}</p>
+                                        <p className="small">hotspots seen by VIIRS</p>
+                                    </div>
+                                    <div className="key-number">
+                                        <p className="big">
+                                            {satelliteGlance.viirsShare === null ? "n/a" : `${satelliteGlance.viirsShare}%`}
+                                        </p>
+                                        <p className="small">of all detections came from VIIRS</p>
+                                    </div>
+                                    <div className="key-number">
+                                        <p className="big">{satelliteGlance.busiest}</p>
+                                        <p className="small">the busiest month (both instruments)</p>
                                     </div>
                                 </div>
                             </section>
