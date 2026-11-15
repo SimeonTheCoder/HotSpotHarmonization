@@ -57,6 +57,16 @@ export function getInstruments(countryCode: string, year: number, types: FireTyp
     });
 }
 
+export interface DayNight {
+    day: number;
+    night: number;
+}
+
+// hotspots of one year seen by day and by night (all types of fire)
+export function getDayNight(countryCode: string, year: number): Promise<DayNight> {
+    return get<DayNight>(`/api/statistics/${encodeURIComponent(countryCode)}/daynight`, { year });
+}
+
 // One fire detection as the "Detailed stats" list shows it (the FIRMS columns of the database).
 export interface Fire {
     id: string; // database Id
