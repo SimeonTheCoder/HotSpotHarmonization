@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import FireMap from "../components/Map";
+import { useSearchParams } from "react-router-dom";
+import FireMap, { type FireSpot } from "../components/Map";
 import CountryDropdown from "../components/CountryFilter";
 import type { CountryOption } from "../data/countries";
 import { getCountryFeature } from "../data/countryShapes";
@@ -12,7 +13,22 @@ function MapPage() {
     const [highlighted, setHighlighted] = useState(false);
     const [selectionId, setSelectionId] = useState(0);
 
-    const center = selectedCountry?.coordinates ?? DEFAULT_CENTER;
+    // /map?lat=..&lon=.. shows one fire with the fire icon (the link comes from the statistics page)
+    const [params] = useSearchParams();
+    const fire = useMemo<FireSpot | null>(() => {
+        const lat = Number(params.get("lat"));
+        const lon = Number(params.get("lon"));
+        if (!params.has("lat") || !params.has("lon") || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+        const temp = params.get("temp");
+        return {
+            lat,
+            lon,
+            date: params.get("date") ?? undefined,
+            brightness: temp ? Number(temp) : undefined,
+        };
+    }, [params]);
+
+    const center = selectedCountry?.coordinates ?? (fire ? [fire.lat, fire.lon] as [number, number] : DEFAULT_CENTER);
 
     // Computed in the same render as `center`, so the map gets both together
     const feature = useMemo(
@@ -38,6 +54,7 @@ function MapPage() {
             <div className="map-wrapper">
                 <FireMap
                     center={center}
+                    fire={fire}
                     feature={feature}
                     highlighted={highlighted}
                     selectionId={selectionId}

@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import Combobox, { type Option } from "../components/Combobox";
 import StatsChart, { type ChartKind, type Series } from "../components/StatsChart";
 import countries from "../data/countries";
 import { fireTypes, type FireType } from "../data/fireTypes";
 import { getKeyNumbers } from "../data/keyNumbers";
 import { getCountryMonthly, type MonthlyRow } from "../data/mockData";
+import { getTopFires, type Fire } from "../data/mockFires";
 import { STAT_TYPES, getStatData, type StatType } from "../data/statData";
 
 const FROM = 2001;
@@ -72,13 +74,17 @@ function saveFile(url: string, fileName: string) {
 function Statistics() {
     const [country, setCountry] = useState("BGR");
     const [stat, setStat] = useState<StatType>("fires-over-time");
-    const [kind, setKind] = useState("line");
+    const [kind, setKind] = useState("bar");
     const [view, setView] = useState("year"); // "year", "month" or "compare"
     const [monthYear, setMonthYear] = useState("2025"); // used when view is "month"
     const [yearA, setYearA] = useState("2024"); // used when view is "compare"
     const [yearB, setYearB] = useState("2025");
     const [types, setTypes] = useState<FireType[]>(["vegetation"]);
     const [rows, setRows] = useState<MonthlyRow[]>([]);
+    // the bar the user clicked: the biggest fires of that month (or year) are listed under the chart
+    const [picked, setPicked] = useState<{ country: string; year: number; month: number | null } | null>(null);
+    const [fires, setFires] = useState<Fire[]>([]);
+    const [openFire, setOpenFire] = useState<string | null>(null); // id of the fire whose details are shown
 
     // the pie chart always shows the 12 months of one year
     const isPie = kind === "pie";
@@ -91,7 +97,7 @@ function Statistics() {
         const next = STAT_TYPES.find((t) => t.value === value);
         if (!next) return;
         setStat(next.value);
-        setKind(next.chart); // start with the chart that fits this statistic
+        setKind(next.value === "fires-over-time" ? "bar" : next.chart); // start with the chart that fits this statistic
     }
 
     const countryName = countries.find((c) => c.code === country)?.label ?? "";
@@ -110,6 +116,40 @@ function Statistics() {
             cancelled = true;
         };
     }, [country, types]);
+
+    // the list only belongs to the country it was opened for, and only to the bar chart
+    const period = picked && picked.country === country && kind === "bar" && !extra ? picked : null;
+    const periodYear = period?.year;
+    const periodMonth = period?.month;
+
+    useEffect(() => {
+        if (periodYear === undefined || periodMonth === undefined) return;
+        let cancelled = false;
+        getTopFires(country, periodYear, periodMonth, types).then((result) => {
+            if (!cancelled) setFires(result);
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [country, periodYear, periodMonth, types]);
+
+    // a click on a bar: which year (and month) does it stand for?
+    function pickBar(index: number, seriesIndex: number) {
+        let year: number;
+        let month: number | null = null;
+        if (shownView === "year") {
+            year = Number(years[index]);
+        } else if (shownView === "month") {
+            year = Number(monthYear);
+            month = index + 1;
+        } else {
+            year = Number(seriesIndex === 0 ? yearA : yearB);
+            month = index + 1;
+        }
+        setFires([]);
+        setOpenFire(null);
+        setPicked({ country, year, month });
+    }
 
     const typeNames = fireTypes.filter((t) => types.includes(t.value)).map((t) => t.label);
     const numbers = getKeyNumbers(rows);
@@ -417,12 +457,24 @@ function Statistics() {
                             </section>
                         )}
 
+                        <div className={period ? "stats-split has-list" : "stats-split"}>
                         <div className="stats-result">
                             <h3>{title}</h3>
                             {sentence && <p className="sentence">{sentence}</p>}
                             <p className="counted">
-                                {extra ? "Demo numbers, all types of fire." : `Counted: ${typeNames.join(", ").toLowerCase()}.`}
+                                {extra ? (
+                                    "Demo numbers, all types of fire."
+                                ) : (
+                                    <>
+                                        Counted: <strong>{typeNames.join(", ").toLowerCase()}</strong>.
+                                    </>
+                                )}
                             </p>
+                            {kind === "bar" && !extra && (
+                                <p className="chart-hint">
+                                    Click a bar to open the detailed stats of that {shownView === "year" ? "year" : "month"}.
+                                </p>
+                            )}
 
                             <div
                                 className="stats-chart"
@@ -433,6 +485,7 @@ function Statistics() {
                                     labels={labels}
                                     series={series}
                                     yTitle={yTitle}
+                                    onBarClick={!extra ? pickBar : undefined}
                                 />
                             </div>
 
@@ -454,10 +507,118 @@ function Statistics() {
                                 </div>
                             </div>
                         </div>
+
+                        {period && (
+                            <DetailedStats
+                                title={`Detailed stats: ${fires.length || 25} biggest fires in ${countryName}, ${period.month ? FULL_MONTHS[period.month - 1] + " " : ""}${period.year}`}
+                                fires={fires}
+                                openId={openFire}
+                                onOpen={setOpenFire}
+                                onClose={() => setPicked(null)}
+                            />
+                        )}
+                        </div>
                     </>
                 )}
             </div>
         </>
+    );
+}
+
+// 1558 becomes "15:58"
+function formatTime(hhmm: number): string {
+    const text = String(hhmm).padStart(4, "0");
+    return `${text.slice(0, 2)}:${text.slice(2)}`;
+}
+
+interface DetailedStatsProps {
+    title: string;
+    fires: Fire[];
+    openId: string | null;
+    onOpen: (id: string | null) => void;
+    onClose: () => void;
+}
+
+// the "detailed stats" list of the biggest fires; after a click on the coordinates only that fire stays, with more details
+function DetailedStats({ title, fires, openId, onOpen, onClose }: DetailedStatsProps) {
+    const open = fires.find((f) => f.id === openId) ?? null;
+    const shown = open ? [open] : fires;
+    const coords = (f: Fire) => `${f.latitude.toFixed(3)}, ${f.longitude.toFixed(3)}`;
+
+    return (
+        <section className="fire-list" aria-label={title}>
+            <div className="fire-list-head">
+                <h3>{title}</h3>
+                <div className="buttons">
+                    {open && (
+                        <button type="button" className="button" onClick={() => onOpen(null)}>
+                            Show the whole list
+                        </button>
+                    )}
+                    <button type="button" className="button" onClick={onClose}>
+                        Close
+                    </button>
+                </div>
+            </div>
+            {fires.length === 0 ? (
+                <p className="counted">No fires to show.</p>
+            ) : (
+                <>
+                    <table className="fire-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Date</th>
+                                <th>Coordinates (click for details)</th>
+                                <th>Temperature (K)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {shown.map((f) => (
+                                <tr key={f.id} className={f.id === openId ? "open" : ""}>
+                                    <td>{fires.indexOf(f) + 1}</td>
+                                    <td>{f.acq_date}</td>
+                                    <td>
+                                        <button type="button" className="coords" onClick={() => onOpen(f.id)}>
+                                            {coords(f)}
+                                        </button>
+                                    </td>
+                                    <td>{f.brightness}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+
+                    {open && (
+                        <dl className="fire-details">
+                            <div><dt>Date (acq_date)</dt><dd>{open.acq_date}</dd></div>
+                            <div><dt>Time, UTC (acq_time)</dt><dd>{formatTime(open.acq_time)}</dd></div>
+                            <div><dt>Latitude</dt><dd>{open.latitude}</dd></div>
+                            <div><dt>Longitude</dt><dd>{open.longitude}</dd></div>
+                            <div><dt>Brightness</dt><dd>{open.brightness} K</dd></div>
+                            <div><dt>Brightness, channel 31 (bright_t31)</dt><dd>{open.bright_t31} K</dd></div>
+                            <div><dt>Fire power (frp)</dt><dd>{fmt(open.frp)} MW</dd></div>
+                            <div><dt>Pixel size (scan x track)</dt><dd>{open.scan} x {open.track} km</dd></div>
+                            <div><dt>Confidence</dt><dd>{open.confidence}%</dd></div>
+                            <div><dt>Satellite</dt><dd>{open.satellite}</dd></div>
+                            <div><dt>Instrument</dt><dd>{open.instrument}</dd></div>
+                            <div><dt>Seen in the</dt><dd>{open.daynight === "D" ? "Day" : "Night"}</dd></div>
+                            <div><dt>Type of fire</dt><dd>{fireTypes.find((t) => t.firmsType === open.type)?.label ?? "Unknown"}</dd></div>
+                            <div>
+                                <dt>Map</dt>
+                                <dd>
+                                    <Link
+                                        to={`/map?lat=${open.latitude}&lon=${open.longitude}&date=${open.acq_date}&temp=${open.brightness}`}
+                                    >
+                                        Show on the map
+                                    </Link>
+                                </dd>
+                            </div>
+                        </dl>
+                    )}
+                </>
+            )}
+        </section>
     );
 }
 

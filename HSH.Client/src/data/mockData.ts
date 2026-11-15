@@ -13,7 +13,7 @@ export interface MonthlyRow {
 }
 
 // turns a text into a number, so the same country always gives the same fake data
-function hash(text: string): number {
+export function hash(text: string): number {
     let h = 0;
     for (const ch of text) {
         h = (h * 31 + ch.charCodeAt(0)) >>> 0;
@@ -22,7 +22,7 @@ function hash(text: string): number {
 }
 
 // a tiny random number generator that gives the same numbers for the same seed
-function seeded(seed: number) {
+export function seeded(seed: number) {
     let s = seed;
     return () => {
         s = (s * 1664525 + 1013904223) % 4294967296;

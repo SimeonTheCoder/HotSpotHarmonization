@@ -38,6 +38,8 @@ interface StatsChartProps {
     labels: string[];
     series: Series[];
     yTitle: string;
+    // called when a bar is clicked (bar chart only)
+    onBarClick?: (index: number, seriesIndex: number) => void;
 }
 
 // one colour for each line: dark purple, then red
@@ -93,7 +95,7 @@ function sliceColor(value: number, min: number, max: number): string {
     return `rgb(${rgb.join(",")})`;
 }
 
-function StatsChart({ kind, labels, series, yTitle }: StatsChartProps) {
+function StatsChart({ kind, labels, series, yTitle, onBarClick }: StatsChartProps) {
     if (kind === "pie") {
         const values = (series[0]?.values ?? []).map((v) => v ?? 0);
         const total = values.reduce((sum, v) => sum + v, 0);
@@ -152,6 +154,17 @@ function StatsChart({ kind, labels, series, yTitle }: StatsChartProps) {
     const peak = series.length === 1 ? peakIndex(series[0].values) : -1;
 
     if (kind === "bar") {
+        const clickable = onBarClick
+            ? {
+                  onClick: (_: unknown, elements: { index: number; datasetIndex: number }[]) => {
+                      if (elements.length > 0) onBarClick(elements[0].index, elements[0].datasetIndex);
+                  },
+                  onHover: (event: { native: Event | null }, elements: unknown[]) => {
+                      const target = event.native?.target as HTMLElement | undefined;
+                      if (target) target.style.cursor = elements.length > 0 ? "pointer" : "default";
+                  },
+              }
+            : {};
         const data = {
             labels,
             datasets: series.map((s, i) => ({
@@ -162,7 +175,7 @@ function StatsChart({ kind, labels, series, yTitle }: StatsChartProps) {
                 borderSkipped: false as const,
             })),
         };
-        return <Bar data={data} options={options} plugins={[peakLabel]} />;
+        return <Bar data={data} options={{ ...options, ...clickable }} plugins={[peakLabel]} />;
     }
 
     // many labels (years) get no dots, only the highest point is shown
