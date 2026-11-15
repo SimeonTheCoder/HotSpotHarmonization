@@ -42,13 +42,25 @@ app.UseSwaggerUI();
 app.UseCors("Client");
 
 // The built website (HSH.Client) lives in wwwroot after dotnet publish.
+// index.html must never be cached: after a deploy it points to new /assets/*.js file names.
+var staticFiles = new StaticFileOptions
+{
+    OnPrepareResponse = ctx =>
+    {
+        if (ctx.File.Name == "index.html")
+            ctx.Context.Response.Headers.CacheControl = "no-cache";
+    },
+};
 app.UseDefaultFiles();
-app.UseStaticFiles();
+app.UseStaticFiles(staticFiles);
 
 app.MapControllers();
 
+// Unknown /api addresses return 404 instead of the website.
+app.MapFallback("/api/{**path}", () => Results.NotFound());
+
 // Page addresses like /statistics are handled by React Router, so they get index.html.
-// Unknown /api addresses still return 404.
-app.MapFallbackToFile("{*path:regex(^(?!api/).*$)}", "index.html");
+// Paths that look like files (/assets/x.js) are not caught here, so a missing file is a real 404.
+app.MapFallbackToFile("index.html", staticFiles);
 
 app.Run();
