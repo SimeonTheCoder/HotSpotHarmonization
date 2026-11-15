@@ -28,6 +28,10 @@ export function getMonthly(countryCode: string, year: number, types: FireType[])
     });
 }
 
+export function getAllFiresByCountry(countryCode: string): Promise<FireResponseDto[]> {
+    return get<FireResponseDto[]>(`/api/statistics/${encodeURIComponent(countryCode)}/monthly`, {});
+}
+
 // hotspots per month of two years: 24 rows, first yearA then yearB
 export function compareYears(
     countryCode: string,
@@ -111,6 +115,17 @@ interface TopFireDto {
     dayNight: "D" | "N";
     type: number;
 }
+
+export interface FireResponseDto {
+    id: number,
+    latitude: number,
+    longitude: number,
+    brightness: number,
+    acquiredAt: string,
+    countryName: string,
+    satellite: string,
+    type: string
+};
 
 const round1 = (n: number | null) => (n === null ? null : Math.round(n * 10) / 10);
 
