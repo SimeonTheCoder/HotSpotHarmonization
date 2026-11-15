@@ -41,3 +41,18 @@ export function compareYears(
         types: types.join(","),
     });
 }
+
+export interface InstrumentRow {
+    year: number;
+    month: number; // 1 to 12
+    modis: number;
+    viirs: number;
+}
+
+// hotspots per month of one year, split into MODIS and VIIRS: 12 rows
+export function getInstruments(countryCode: string, year: number, types: FireType[]): Promise<InstrumentRow[]> {
+    return get<InstrumentRow[]>(`/api/statistics/${encodeURIComponent(countryCode)}/instruments`, {
+        year,
+        types: types.join(","),
+    });
+}

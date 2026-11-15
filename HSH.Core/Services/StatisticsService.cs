@@ -13,6 +13,9 @@ public interface IStatisticsService
 
     /// <summary>Hotspots per month of one country for two years (24 rows: yearA then yearB). Null if the country is unknown.</summary>
     Task<IReadOnlyList<MonthlyRow>?> CompareYearsAsync(string countryCode, int yearA, int yearB, IReadOnlyCollection<FireType> types, CancellationToken ct = default);
+
+    /// <summary>Hotspots per month (always 12 rows) of one country in one year, split into MODIS and VIIRS. Null if the country is unknown.</summary>
+    Task<IReadOnlyList<InstrumentMonthlyRow>?> GetInstrumentsAsync(string countryCode, int year, IReadOnlyCollection<FireType> types, CancellationToken ct = default);
 }
 
 public class StatisticsService(
@@ -39,6 +42,47 @@ public class StatisticsService(
         var a = await MonthlyForYearAsync(countryId.Value, yearA, types, ct);
         var b = await MonthlyForYearAsync(countryId.Value, yearB, types, ct);
         return [.. a, .. b];
+    }
+
+    public async Task<IReadOnlyList<InstrumentMonthlyRow>?> GetInstrumentsAsync(
+        string countryCode, int year, IReadOnlyCollection<FireType> types, CancellationToken ct = default)
+    {
+        int? countryId = await countries.FindIdAsync(countryCode, ct);
+        if (countryId is null) return null;
+
+        var typeArray = types.Distinct().Order().ToArray();
+        string key = $"instruments:{countryId}:{year}:{string.Join(',', typeArray)}";
+
+        return (await cache.GetOrCreateAsync(key, async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(12);
+
+            var from = new DateTime(year, 1, 1);
+            var to = from.AddYears(1);
+            var modis = new int[12];
+            var viirs = new int[12];
+
+            foreach (var block in (await blocks.GetBlocksAsync(countryId.Value, ct)).Where(b => b.Overlaps(year)))
+            {
+                var perMonth = await db.FireData.AsNoTracking()
+                    .Where(f => f.Id >= block.StartId && f.Id <= block.EndId)
+                    .Where(f => f.AcquiredAt >= from && f.AcquiredAt < to)
+                    .Where(f => typeArray.Contains(f.Type))
+                    .GroupBy(f => new { f.AcquiredAt.Month, f.Instrument })
+                    .Select(g => new { g.Key.Month, g.Key.Instrument, Count = g.Count() })
+                    .ToListAsync(ct);
+
+                foreach (var m in perMonth)
+                {
+                    if (m.Instrument == Instrument.Modis) modis[m.Month - 1] += m.Count;
+                    else if (m.Instrument == Instrument.Viirs) viirs[m.Month - 1] += m.Count;
+                }
+            }
+
+            return (IReadOnlyList<InstrumentMonthlyRow>)Enumerable.Range(1, 12)
+                .Select(month => new InstrumentMonthlyRow(year, month, modis[month - 1], viirs[month - 1]))
+                .ToList();
+        }))!;
     }
 
     private async Task<IReadOnlyList<MonthlyRow>> MonthlyForYearAsync(
