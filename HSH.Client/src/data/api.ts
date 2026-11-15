@@ -67,6 +67,18 @@ export function getDayNight(countryCode: string, year: number): Promise<DayNight
     return get<DayNight>(`/api/statistics/${encodeURIComponent(countryCode)}/daynight`, { year });
 }
 
+export interface Confidence {
+    low: number;
+    nominal: number;
+    high: number;
+}
+
+// hotspots of one country by detection confidence (all types of fire)
+// MODIS percentages are grouped as low <= 30%, nominal 31-80%, high > 80%
+export function getConfidence(countryCode: string, year: number): Promise<Confidence> {
+    return get<Confidence>(`/api/statistics/${encodeURIComponent(countryCode)}/confidence`, { year });
+}
+
 // One fire detection as the "Detailed stats" list shows it (the FIRMS columns of the database).
 export interface Fire {
     id: string; // database Id
