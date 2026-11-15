@@ -2,10 +2,10 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import Combobox, { type Option } from "../components/Combobox";
 import StatsChart, { type ChartKind, type Series } from "../components/StatsChart";
+import { compareYears, getMonthly } from "../data/api";
 import countries from "../data/countries";
 import { fireTypes, type FireType } from "../data/fireTypes";
-import { getKeyNumbers } from "../data/keyNumbers";
-import { getCountryMonthly, type MonthlyRow } from "../data/mockData";
+import type { MonthlyRow } from "../data/mockData";
 import { getTopFires, type Fire } from "../data/mockFires";
 import { STAT_TYPES, getStatData, type StatType } from "../data/statData";
 
@@ -31,7 +31,6 @@ const typeOptions: Option[] = [
 ];
 
 const dataOptions: Option[] = [
-    { value: "year", label: "Per year (2001 to 2025)" },
     { value: "month", label: "Per month in one year" },
     { value: "compare", label: "Compare two years" },
 ];
@@ -39,8 +38,6 @@ const dataOptions: Option[] = [
 const yearOptions: Option[] = [];
 for (let y = TO; y >= FROM; y--) yearOptions.push({ value: String(y), label: String(y) });
 
-const years: string[] = [];
-for (let y = FROM; y <= TO; y++) years.push(String(y));
 
 // 12345 becomes "12,345"
 function fmt(n: number): string {
@@ -75,12 +72,14 @@ function Statistics() {
     const [country, setCountry] = useState("BGR");
     const [stat, setStat] = useState<StatType>("fires-over-time");
     const [kind, setKind] = useState("bar");
-    const [view, setView] = useState("year"); // "year", "month" or "compare"
+    const [view, setView] = useState("month"); // "month" or "compare"
     const [monthYear, setMonthYear] = useState("2025"); // used when view is "month"
     const [yearA, setYearA] = useState("2024"); // used when view is "compare"
     const [yearB, setYearB] = useState("2025");
     const [types, setTypes] = useState<FireType[]>(["vegetation"]);
-    const [rows, setRows] = useState<MonthlyRow[]>([]);
+    // what the API sent for the "per month in one year" and "compare two years" views,
+    // together with the choices it belongs to (so an old answer is never shown for new choices)
+    const [apiResult, setApiResult] = useState<{ key: string; rows: MonthlyRow[]; error: string | null } | null>(null);
     // the bar the user clicked: the biggest fires of that month (or year) are listed under the chart
     const [picked, setPicked] = useState<{ country: string; year: number; month: number | null } | null>(null);
     const [fires, setFires] = useState<Fire[]>([]);
@@ -101,21 +100,50 @@ function Statistics() {
     }
 
     const countryName = countries.find((c) => c.code === country)?.label ?? "";
+    // the API wants the two-letter code ("BG"), the page keeps the three-letter one ("BGR")
+    const countryCode2 = countries.find((c) => c.code === country)?.value;
+
+    // the month and compare views get their numbers from the API
+    const usesApi = (shownView === "month" || shownView === "compare") && !!countryCode2 && types.length > 0;
+    const requestKey =
+        shownView === "month"
+            ? `month|${countryCode2}|${monthYear}|${types.join(",")}`
+            : `compare|${countryCode2}|${yearA}|${yearB}|${types.join(",")}`;
+    const apiDone = apiResult?.key === requestKey;
+    const loading = usesApi && !apiDone;
+    const apiError = apiDone ? apiResult.error : null;
+    const yearRows = apiDone ? apiResult.rows : [];
 
     function toggleType(type: FireType) {
         setTypes(types.includes(type) ? types.filter((t) => t !== type) : [...types, type]);
     }
 
-    // load the monthly data again every time another country or other types are chosen
+    // ask the API for the chosen year(s); until the answer arrives the page shows the loading animation
     useEffect(() => {
+        if (!usesApi || !countryCode2) return;
         let cancelled = false;
-        getCountryMonthly(country, FROM, TO, types).then((result) => {
-            if (!cancelled) setRows(result);
-        });
+        const request =
+            shownView === "month"
+                ? getMonthly(countryCode2, Number(monthYear), types)
+                : compareYears(countryCode2, Number(yearA), Number(yearB), types);
+        request
+            .then((rows) => {
+                if (!cancelled) setApiResult({ key: requestKey, rows, error: null });
+            })
+            .catch((error: unknown) => {
+                console.error(error);
+                if (!cancelled) {
+                    setApiResult({
+                        key: requestKey,
+                        rows: [],
+                        error: "The numbers could not be loaded. Is the API running?",
+                    });
+                }
+            });
         return () => {
             cancelled = true;
         };
-    }, [country, types]);
+    }, [usesApi, requestKey, shownView, countryCode2, monthYear, yearA, yearB, types]);
 
     // the list only belongs to the country it was opened for, and only to the bar chart
     const period = picked && picked.country === country && kind === "bar" && !extra ? picked : null;
@@ -135,30 +163,20 @@ function Statistics() {
 
     // a click on a bar: which year (and month) does it stand for?
     function pickBar(index: number, seriesIndex: number) {
-        let year: number;
-        let month: number | null = null;
-        if (shownView === "year") {
-            year = Number(years[index]);
-        } else if (shownView === "month") {
-            year = Number(monthYear);
-            month = index + 1;
-        } else {
-            year = Number(seriesIndex === 0 ? yearA : yearB);
-            month = index + 1;
-        }
+        const year = Number(shownView === "month" ? monthYear : seriesIndex === 0 ? yearA : yearB);
+        const month = index + 1;
         setFires([]);
         setOpenFire(null);
         setPicked({ country, year, month });
     }
 
     const typeNames = fireTypes.filter((t) => types.includes(t.value)).map((t) => t.label);
-    const numbers = getKeyNumbers(rows);
 
-    // the 12 monthly numbers of one year, or null if that month has no data
+    // the 12 monthly numbers of one year (from the API), or null if that month has no data
     function monthValues(year: string): (number | null)[] {
         return MONTHS.map(
             (_, i) =>
-                rows.find((r) => r.year === Number(year) && r.month === i + 1)?.hotspots ?? null,
+                yearRows.find((r) => r.year === Number(year) && r.month === i + 1)?.hotspots ?? null,
         );
     }
 
@@ -179,20 +197,6 @@ function Statistics() {
         const e = extremes(labels, values);
         if (e && labels.length > 1) {
             sentence = `The highest value is ${e.most.name} (${fmt(e.most.value)}) and the lowest is ${e.least.name} (${fmt(e.least.value)}).`;
-        }
-    } else if (shownView === "year") {
-        labels = years;
-        // add the months of every year to get one number per year
-        const values = years.map((year) =>
-            rows.filter((r) => r.year === Number(year)).reduce((sum, r) => sum + r.hotspots, 0),
-        );
-        series = [{ name: countryName, values }];
-        title = `Hotspots per year in ${countryName}, ${FROM} to ${TO}`;
-        yTitle = "Hotspots per year";
-
-        const e = extremes(years, values);
-        if (e) {
-            sentence = `${countryName} had the most hotspots in ${e.most.name} (${fmt(e.most.value)}) and the fewest in ${e.least.name} (${fmt(e.least.value)}).`;
         }
     } else if (shownView === "month") {
         labels = MONTHS;
@@ -252,7 +256,7 @@ function Statistics() {
 
     // saves the numbers of the diagram as a CSV file
     function downloadCsv() {
-        const firstColumn = shownView === "stat" ? "Label" : shownView === "year" ? "Year" : "Month";
+        const firstColumn = shownView === "stat" ? "Label" : "Month";
         const lines = [[firstColumn, ...series.map((s) => s.name)].join(",")];
         labels.forEach((label, i) => {
             lines.push([label, ...series.map((s) => s.values[i] ?? "")].join(","));
@@ -270,8 +274,8 @@ function Statistics() {
         peakA: string;
         peakB: string;
     } | null = null;
-    if (shownView === "compare") {
-        const sum = (values: (number | null)[]) => values.reduce<number>((s, v) => s + (v ?? 0), 0);
+    const sum = (values: (number | null)[]) => values.reduce<number>((s, v) => s + (v ?? 0), 0);
+    if (shownView === "compare" && apiDone && !apiError) {
         const totalA = sum(series[0].values);
         const totalB = sum(series[1].values);
         compareGlance = {
@@ -281,6 +285,19 @@ function Statistics() {
             peakA: extremes(FULL_MONTHS, series[0].values)?.most.name ?? "n/a",
             peakB: extremes(FULL_MONTHS, series[1].values)?.most.name ?? "n/a",
         };
+    }
+
+    // in the month view, the key numbers are about the chosen year
+    let monthGlance: {
+        total: number;
+        busiest: { name: string; value: number };
+        quietest: { name: string; value: number };
+        average: number;
+    } | null = null;
+    if (shownView === "month" && apiDone && !apiError) {
+        const total = sum(series[0].values);
+        const e = extremes(FULL_MONTHS, series[0].values);
+        if (e) monthGlance = { total, busiest: e.most, quietest: e.least, average: Math.round(total / 12) };
     }
 
     const noTypes = !extra && types.length === 0;
@@ -293,7 +310,7 @@ function Statistics() {
                     <h2>Statistics</h2>
                     <p>
                         Choose a country and a type of fire to see how many hotspots the
-                        satellites counted, year by year or month by month.
+                        satellites counted month by month, in one year or two years side by side.
                     </p>
                 </div>
             </section>
@@ -429,29 +446,31 @@ function Statistics() {
                             </section>
                         )}
 
-                        {!extra && !compareGlance && numbers && (
+                        {monthGlance && (
                             <section aria-label={`Key numbers for ${countryName}`}>
                                 <h3 className="key-title">
-                                    {countryName} at a glance, {FROM} to {TO}
+                                    {countryName} at a glance, {monthYear}
                                 </h3>
                                 <div className="key-numbers">
                                     <div className="key-number">
-                                        <p className="big">{fmt(numbers.total)}</p>
-                                        <p className="small">hotspots in total</p>
+                                        <p className="big">{fmt(monthGlance.total)}</p>
+                                        <p className="small">hotspots in {monthYear}</p>
                                     </div>
                                     <div className="key-number">
-                                        <p className="big">{numbers.worstYear.year}</p>
+                                        <p className="big">{monthGlance.busiest.name}</p>
                                         <p className="small">
-                                            worst year, with {fmt(numbers.worstYear.hotspots)} hotspots
+                                            the busiest month, with {fmt(monthGlance.busiest.value)} hotspots
                                         </p>
                                     </div>
                                     <div className="key-number">
-                                        <p className="big">{FULL_MONTHS[numbers.peakMonth - 1]}</p>
-                                        <p className="small">the busiest month in a usual year</p>
+                                        <p className="big">{monthGlance.quietest.name}</p>
+                                        <p className="small">
+                                            the quietest month, with {fmt(monthGlance.quietest.value)} hotspots
+                                        </p>
                                     </div>
                                     <div className="key-number">
-                                        <p className="big">{fmt(numbers.averagePerYear)}</p>
-                                        <p className="small">hotspots in an average year</p>
+                                        <p className="big">{fmt(monthGlance.average)}</p>
+                                        <p className="small">hotspots in an average month</p>
                                     </div>
                                 </div>
                             </section>
@@ -472,22 +491,33 @@ function Statistics() {
                             </p>
                             {kind === "bar" && !extra && (
                                 <p className="chart-hint">
-                                    Click a bar to open the detailed stats of that {shownView === "year" ? "year" : "month"}.
+                                    Click a bar to open the detailed stats of that month.
                                 </p>
                             )}
 
-                            <div
-                                className="stats-chart"
-                                key={`${kind}-${shownView}-${stat}-${country}-${types.join("")}`}
-                            >
-                                <StatsChart
-                                    kind={kind as ChartKind}
-                                    labels={labels}
-                                    series={series}
-                                    yTitle={yTitle}
-                                    onBarClick={!extra ? pickBar : undefined}
-                                />
-                            </div>
+                            {loading ? (
+                                <div className="stats-chart stats-loading" role="status">
+                                    <span className="spinner" aria-hidden="true" />
+                                    <p>Counting the hotspots…</p>
+                                </div>
+                            ) : apiError ? (
+                                <div className="stats-chart stats-loading" role="alert">
+                                    <p>{apiError}</p>
+                                </div>
+                            ) : (
+                                <div
+                                    className="stats-chart"
+                                    key={`${kind}-${shownView}-${stat}-${country}-${types.join("")}`}
+                                >
+                                    <StatsChart
+                                        kind={kind as ChartKind}
+                                        labels={labels}
+                                        series={series}
+                                        yTitle={yTitle}
+                                        onBarClick={!extra ? pickBar : undefined}
+                                    />
+                                </div>
+                            )}
 
                             <div className="chart-actions">
                                 <p className="counted">

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import L from "leaflet";
 import {
@@ -11,6 +11,7 @@ import {
     useMapEvents,
 } from "react-leaflet";
 import type { Feature } from "geojson";
+import type { FireDetection } from "../data/mapFireData";
 
 // one fire that is shown with the fire icon (opened from the statistics page)
 export interface FireSpot {
@@ -20,18 +21,38 @@ export interface FireSpot {
     brightness?: number;
 }
 
+// the visible area of the map, reported to the page
+export interface MapView {
+    north: number;
+    south: number;
+    west: number;
+    east: number;
+    heightKm: number; // north-to-south distance of the visible area
+}
+
 // the "fire" icon of Bootstrap Icons (https://icons.getbootstrap.com/icons/fire/), MIT licence
-const fireIcon = L.divIcon({
-    className: "fire-marker",
-    html: renderToStaticMarkup(
-        <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" fill="currentColor" viewBox="0 0 16 16">
-            <path d="M8 16c3.314 0 6-2 6-5.5 0-1.5-.5-4-2.5-6 .25 1.5-1.25 2-1.25 2C11 4 9 .5 6 0c.357 2 .5 4-2 6-1.25 1-2 2.729-2 4.5C2 14 4.686 16 8 16m0-1c-1.657 0-3-1-3-2.75 0-.75.25-2 1.25-3C6.125 10 7 10.5 7 10.5c-.375-1.25.5-3.25 2-3.5-.179 1-.25 2 1 3 .625.5 1 1.364 1 2.25C11 14 9.657 15 8 15" />
-        </svg>,
-    ),
-    iconSize: [40, 40],
-    iconAnchor: [20, 36], // the flame stands on the exact spot
-    popupAnchor: [0, -34],
-});
+function makeFireIcon(size: number, anchorY: number, popupY: number) {
+    return L.divIcon({
+        className: "fire-marker",
+        html: renderToStaticMarkup(
+            <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width={size}
+                height={size}
+                fill="currentColor"
+                viewBox="0 0 16 16"
+            >
+                <path d="M8 16c3.314 0 6-2 6-5.5 0-1.5-.5-4-2.5-6 .25 1.5-1.25 2-1.25 2C11 4 9 .5 6 0c.357 2 .5 4-2 6-1.25 1-2 2.729-2 4.5C2 14 4.686 16 8 16m0-1c-1.657 0-3-1-3-2.75 0-.75.25-2 1.25-3C6.125 10 7 10.5 7 10.5c-.375-1.25.5-3.25 2-3.5-.179 1-.25 2 1 3 .625.5 1 1.364 1 2.25C11 14 9.657 15 8 15" />
+            </svg>,
+        ),
+        iconSize: [size, size],
+        iconAnchor: [size / 2, anchorY], // the flame stands on the exact spot
+        popupAnchor: [0, popupY],
+    });
+}
+
+const fireIcon = makeFireIcon(40, 36, -34); // the single fire opened from statistics
+const areaFireIcon = makeFireIcon(28, 25, -24); // fires found by "Search this area"
 
 // puts the fire on the map, moves the map to it and opens its popup
 function FireMarker({ fire }: { fire: FireSpot }) {
@@ -69,6 +90,8 @@ function FireMarker({ fire }: { fire: FireSpot }) {
 interface FireMapProps {
     center: [number, number];
     fire?: FireSpot | null;
+    fires?: FireDetection[]; // fires from "Search this area"
+    onViewChange?: (view: MapView) => void; // reports the visible area
     feature: Feature | null;
     highlighted: boolean;
     selectionId: number;
@@ -81,7 +104,10 @@ function MapController({
     highlighted,
     selectionId,
     onClear,
-}: FireMapProps) {
+}: Pick<
+    FireMapProps,
+    "center" | "feature" | "highlighted" | "selectionId" | "onClear"
+>) {
     const map = useMap();
     const moving = useRef(false);
     const [lat, lng] = center;
@@ -125,22 +151,83 @@ function MapController({
     );
 }
 
-function FireMap(props: FireMapProps) {
+// Reports the visible area (corners and height in km) to the page
+function ViewReporter({ onViewChange }: Pick<FireMapProps, "onViewChange">) {
+    const map = useMap();
+
+    const report = useCallback(() => {
+        if (!onViewChange) return;
+        const b = map.getBounds();
+        onViewChange({
+            north: b.getNorth(),
+            south: b.getSouth(),
+            west: b.getWest(),
+            east: b.getEast(),
+            heightKm: map.distance(b.getNorthWest(), b.getSouthWest()) / 1000,
+        });
+    }, [map, onViewChange]);
+
+    useEffect(() => {
+        report(); // initial value
+    }, [report]);
+
+    useMapEvents({
+        moveend: report,
+        zoomend: report,
+        resize: report,
+    });
+
+    return null;
+}
+
+function FireMap({
+    center,
+    fire,
+    fires = [],
+    onViewChange,
+    feature,
+    highlighted,
+    selectionId,
+    onClear,
+}: FireMapProps) {
     return (
         <MapContainer
-            center={props.center}
+            center={center}
             zoom={6}
             minZoom={3}
             maxZoom={18}
             style={{ height: "100%", width: "100%" }}
         >
-            <MapController {...props} />
-            {props.fire && <FireMarker fire={props.fire} />}
+            <MapController
+                center={center}
+                feature={feature}
+                highlighted={highlighted}
+                selectionId={selectionId}
+                onClear={onClear}
+            />
+            <ViewReporter onViewChange={onViewChange} />
+
+            {fire && <FireMarker fire={fire} />}
+
             <TileLayer
                 url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
                 maxZoom={18}
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             />
+
+            {fires.map((f) => (
+                <Marker
+                    key={f.id}
+                    position={[f.latitude, f.longitude]}
+                    icon={areaFireIcon}
+                >
+                    <Popup>
+                        <strong>Fire</strong>
+                        <br />
+                        {f.latitude.toFixed(3)}, {f.longitude.toFixed(3)}
+                    </Popup>
+                </Marker>
+            ))}
         </MapContainer>
     );
 }

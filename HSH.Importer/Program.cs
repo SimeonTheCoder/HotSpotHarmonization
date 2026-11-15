@@ -14,10 +14,12 @@ using HSH.Data.Models;
 using HSH.Importer;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using HSH.Data.Data.Models;
 
 var positional = args.Where(a => !a.StartsWith("--")).ToArray();
 bool validateOnly = args.Contains("--validate");
 bool treeMode = args.Contains("--trees");
+bool cellsMode = args.Contains("--cells");
 
 if (positional.Length == 0 || !Directory.Exists(positional[0]))
 {
@@ -25,6 +27,121 @@ if (positional.Length == 0 || !Directory.Exists(positional[0]))
         "Usage: HSH.Importer <NASADataFolder> [\"<connection string>\"] [--validate]"
     );
     return 1;
+}
+
+async Task CalculateCells()
+{
+    string connectionString = ConnectionString.Resolve(positional.Skip(1).ToArray());
+    await using (var db = DesignTimeDbContextFactory.Create(connectionString))
+    {
+        List<QuadTree> toAdd = new();
+        Country[] countries = db.Countries.ToArray();
+
+        foreach (var country in countries)
+        {
+            int countryId = country.Id;
+            Console.WriteLine($"Now processing {country.CountryName}");
+
+            FireDataDTO[] dbFireData = await db
+                .FireData.Where(fd => fd.CountryId == countryId)
+                .Select(fd => new FireDataDTO()
+                {
+                    Id = fd.Id,
+                    TreeId = fd.CountryId,
+                    CountryId = fd.CountryId,
+                    Latitude = (float)fd.Latitude,
+                    Longitude = (float)fd.Longitude,
+                })
+                .ToArrayAsync();
+
+            Console.WriteLine("Fetched Fire Data");
+
+            QuadTree[] processed = await db
+                .QuadTrees.Where(q => q.CountryId == countryId)
+                .ToArrayAsync();
+
+            Console.WriteLine("Fetched Processed");
+
+            if (processed.Length == dbFireData.Length)
+            {
+                Console.WriteLine("Already done, skipping!");
+                continue;
+            }
+
+            TreeBoundary[] boundaries = await db
+                .TreeBoundaries.Where(b => b.TreeId == countryId)
+                .ToArrayAsync();
+
+            Console.WriteLine("Fetched Boundaries");
+
+            boundaries.Sort((a, b) => a.BoundaryId.CompareTo(b.BoundaryId));
+
+            Console.WriteLine("Sorted Boundaries");
+
+            toAdd.Clear();
+
+            for (int i = 0; i < dbFireData.Length; i++)
+            {
+                var fire = dbFireData[i];
+
+                if (processed.Count(q => q.FireId == fire.Id) != 0)
+                    continue;
+
+                int pointer = 0;
+                ushort result = 0;
+
+                for (int depth = 0; depth < 16; depth++)
+                {
+                    result *= 2;
+
+                    TreeBoundary currBoundary = boundaries[pointer];
+
+                    if (
+                        (depth % 2 == 0 && fire.Longitude >= currBoundary.Value)
+                        || (depth % 2 == 1 && fire.Latitude >= currBoundary.Value)
+                    )
+                    {
+                        result += 1;
+                        pointer = currBoundary.RightChildId;
+                    }
+                    else
+                    {
+                        pointer = currBoundary.LeftChildId;
+                    }
+
+                    if (pointer == -1)
+                    {
+                        break;
+                    }
+                }
+
+                toAdd.Add(
+                    new()
+                    {
+                        CellId = result,
+                        FireId = fire.Id,
+                        TreeId = countryId,
+                        CountryId = fire.CountryId,
+                    }
+                );
+            }
+
+            await db.AddRangeAsync(toAdd);
+            Console.WriteLine(countryId);
+            await db.SaveChangesAsync();
+            Console.WriteLine("Cell Ids - Done!");
+        }
+
+        await db.FireData.ForEachAsync(
+            (fire) =>
+            {
+                if (fire.TreeId == null)
+                    fire.TreeId = fire.CountryId;
+            }
+        );
+
+        await db.SaveChangesAsync();
+    }
 }
 
 async Task TreeMode(string folder)
@@ -113,6 +230,8 @@ async Task TreeMode(string folder)
                 StringComparer.OrdinalIgnoreCase
             );
 
+        List<QuadTree> toAdd = new();
+
         foreach (var file in files)
         {
             int countryId = countryIds[file.CountryKey];
@@ -150,76 +269,7 @@ async Task TreeMode(string folder)
                 await db.SaveChangesAsync();
                 Console.WriteLine("Done!");
             }
-
-            FireData[] dbFireData = await db
-                .FireData.Where(fd => fd.CountryId == countryId)
-                .ToArrayAsync();
-
-            TreeBoundary[] boundaries = await db
-                .TreeBoundaries.Where(b => b.TreeId == countryId)
-                .ToArrayAsync();
-
-            boundaries.Sort((a, b) => a.BoundaryId.CompareTo(b.BoundaryId));
-
-            for (int i = 0; i < dbFireData.Length; i++)
-            {
-                var fire = dbFireData[i];
-
-                int pointer = 0;
-                ushort result = 0;
-
-                for (int depth = 0; depth < 16; depth++)
-                {
-                    result *= 2;
-
-                    TreeBoundary currBoundary = boundaries[pointer];
-
-                    if (
-                        (depth % 2 == 0 && fire.Longitude >= currBoundary.Value)
-                        || (depth % 2 == 1 && fire.Latitude >= currBoundary.Value)
-                    )
-                    {
-                        result += 1;
-                        pointer = currBoundary.RightChildId;
-                    }
-                    else
-                    {
-                        pointer = currBoundary.LeftChildId;
-                    }
-
-                    if (pointer == -1)
-                    {
-                        break;
-                    }
-                }
-
-                await db.QuadTrees.AddAsync(
-                    new()
-                    {
-                        CellId = result,
-                        Fire = fire,
-                        TreeId = countryId,
-                        Country = fire.Country,
-                    }
-                );
-            }
-
-            System.Console.WriteLine(countryId);
-            await db.SaveChangesAsync();
-            Console.WriteLine("Cell Ids - Done!");
         }
-
-        await db.FireData.ForEachAsync(
-            (fire) =>
-            {
-                if (fire.TreeId == null)
-                    fire.TreeId = fire.CountryId;
-            }
-        );
-
-        await db.SaveChangesAsync();
-
-        await db.SaveChangesAsync();
     }
 }
 
@@ -227,6 +277,11 @@ if (treeMode)
 {
     string folder = Path.GetFullPath(positional[0]);
     await TreeMode(folder);
+    return 0;
+}
+else if (cellsMode)
+{
+    await CalculateCells();
     return 0;
 }
 
