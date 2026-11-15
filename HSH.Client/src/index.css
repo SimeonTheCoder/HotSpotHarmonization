@@ -422,6 +422,30 @@ body {
   .button:hover { transform: none; }
 }
 
+/* shown in the chart box while the API counts the hotspots */
+.stats-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  font-size: 17px;
+  text-align: center;
+}
+.stats-loading p { margin: 0; }
+.spinner {
+  width: 48px;
+  height: 48px;
+  border: 5px solid var(--grey);
+  border-top-color: var(--orange);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation-duration: 2.4s; }
+}
+
 
 /* ---------- List of the biggest fires (under the bar chart) ---------- */
 /* with a list open, the page gets wider and the chart moves to the left, the list to the right */
