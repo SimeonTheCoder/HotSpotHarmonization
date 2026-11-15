@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using HSH.API.Helpers;
 using HSH.Core.DTOs; 
 using HSH.Data.Enums;
+using HSH.Core.Interfaces;
 
 namespace HSH.API.Controllers
 {
@@ -14,10 +15,12 @@ namespace HSH.API.Controllers
     public class FireDataController : ControllerBase
     {
         private readonly AppDbContext _context;
+        private readonly IFireService _fireDataService; 
 
-        public FireDataController(AppDbContext context)
+        public FireDataController(AppDbContext context, IFireService fireDataService)
         {
             _context = context;
+            _fireDataService = fireDataService; 
         }       
 
         // GET: api/firedata (Get all fires with Country info)
@@ -70,6 +73,29 @@ namespace HSH.API.Controllers
 
             return Ok(fires);
         }
+
+        // GET: api/firedata/country-name/France/hottest-fires?startDate=2026-01-01&endDate=2026-12-31&fireType=1
+        [HttpGet("country-name/{countryName}/hottest-fires")]
+        public async Task<ActionResult<IEnumerable<FireDataResponseDto>>> GetTop25HottestFires(
+            string countryName,
+            [FromQuery] DateTime startDate,
+            [FromQuery] DateTime endDate,
+            [FromQuery] FireType? fireType = null)
+        {
+            if (startDate > endDate)
+            {
+                return BadRequest(new { message = "StartDate cannot be later than EndDate." });
+            }
+
+            var hottestFires = await _fireDataService.GetTop25HottestFiresByCountryAsync(
+                countryName, 
+                startDate, 
+                endDate, 
+                fireType);
+
+            return Ok(hottestFires);
+        }
+
 
         // GET: api/firedata/search?lat=45.1&lon=12.3 (Find exact match by coordinates)
         [HttpGet("search")]
