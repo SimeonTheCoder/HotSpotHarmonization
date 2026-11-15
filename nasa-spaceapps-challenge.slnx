@@ -2,4 +2,5 @@
   <Project Path="HSH.Core/HSH.Core.csproj" />
   <Project Path="HSH.Data/HSH.Data.csproj" />
   <Project Path="HSH.API/HSH.API.csproj" />
+  <Project Path="HSH.Importer/HSH.Importer.csproj" />
 </Solution>

@@ -15,8 +15,8 @@ namespace HSH.Data.Models
         public string CellId { get; set; }
         
         [Required]
-        public int FireId { get; set; }  // Reference to fire in Data table
-        
-        public string TreeOrCountryId { get; set; }  // Could store either ID (string for flexibility)
+        public long FireId { get; set; }  // Reference to fire in FireData table
+
+        public string? TreeOrCountryId { get; set; }  // Could store either ID (string for flexibility)
     }
 }
