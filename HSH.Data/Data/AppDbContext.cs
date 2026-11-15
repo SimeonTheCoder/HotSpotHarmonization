@@ -19,14 +19,14 @@ namespace HSH.Data
         {
             base.OnModelCreating(modelBuilder);
 
-            // FireData - Country relationship (one-to-many)
+            // FireData - Country relationship (one-to-many) -> MUST use CountryId
             modelBuilder
                 .Entity<FireData>()
                 .HasOne(f => f.Country)
                 .WithMany()
-                .HasForeignKey(q => q.TreeId);
+                .HasForeignKey(f => f.CountryId); 
 
-            // FireData - TreeBoundary relationship (optional, one-to-many)
+            // FireData - TreeBoundary relationship (optional, one-to-many) -> Uses TreeId
             modelBuilder
                 .Entity<FireData>()
                 .HasOne(f => f.Tree)
