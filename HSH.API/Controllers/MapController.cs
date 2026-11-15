@@ -37,4 +37,19 @@ public class MapController : ControllerBase
 
         return Ok(result);
     }
+
+    [HttpGet("{countryCode}/count")]
+    public async Task<IActionResult> CountCountryFiresForTimeFrame(
+        string countryCode,
+        [FromQuery] DateOnly start,
+        [FromQuery] DateOnly end
+    )
+    {
+        if (end.DayNumber - start.DayNumber > 31)
+            return BadRequest("Time span too large!");
+
+        int result = await service.CountFiresCountryPeriodOfTime(countryCode, start, end);
+
+        return Ok(result);
+    }
 }

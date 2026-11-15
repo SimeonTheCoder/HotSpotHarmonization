@@ -4,5 +4,11 @@ namespace HSH.Core.Services.Contracts;
 
 public interface IMapService
 {
-    public Task<CoordinatesResponseDTO[]> GetCountryFiresForPeriodOfTime(string countryCode, DateOnly start, DateOnly end);
+    public Task<CoordinatesResponseDTO[]> GetCountryFiresForPeriodOfTime(
+        string countryCode,
+        DateOnly start,
+        DateOnly end
+    );
+
+    public Task<int> CountFiresCountryPeriodOfTime(string countryCode, DateOnly start, DateOnly end);
 }
