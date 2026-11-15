@@ -208,30 +208,34 @@ public class MapService : IMapService
         Country country = await GetCountryByCode(countryCode);
 
         TreeBoundary[] boundaries = await DbContext
-            .TreeBoundaries.Where(b => b.TreeId == country.Id)
+            .TreeBoundaries.AsNoTracking()
+            .Where(b => b.TreeId == country.Id)
+            .OrderBy(b => b.BoundaryId)
             .ToArrayAsync();
-        boundaries.Sort((a, b) => a.BoundaryId.CompareTo(b.BoundaryId));
+
+        if (boundaries.Length == 0)
+            return [];
 
         List<ushort> toCheck = new();
         Recursion(x1, y1, x2, y2, boundaries[0], boundaries, 2, 0, toCheck, 0);
 
-        System.Console.WriteLine("Calculations done!");
+        if (toCheck.Count == 0)
+            return [];
 
-        toCheck.Sort();
-        System.Console.WriteLine(string.Join(", ", toCheck));
+        ushort[] cells = toCheck.Distinct().ToArray();
+        int countryId = country.Id;
 
-        var results = await DbContext
-            .FireData.Where(f => f.CountryId == country.Id)
-            .Where(f =>
-                DbContext.QuadTrees.Any(q =>
-                    q.CountryId == country.Id && q.FireId == f.Id && toCheck.Contains(q.CellId)
-                )
-            )
-            .Select(f => new CoordinatesResponseDTO()
+        var results = await (
+            from q in DbContext.QuadTrees
+            where q.CountryId == countryId && cells.Contains(q.CellId)
+            join f in DbContext.FireData on q.FireId equals f.Id
+            select new CoordinatesResponseDTO()
             {
                 Latitude = (float)f.Latitude,
                 Longitude = (float)f.Longitude,
-            })
+            }
+        )
+            .AsNoTracking()
             .ToArrayAsync();
 
         return results;
