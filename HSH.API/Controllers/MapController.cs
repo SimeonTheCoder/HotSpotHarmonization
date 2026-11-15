@@ -52,4 +52,17 @@ public class MapController : ControllerBase
 
         return Ok(result);
     }
+
+    [HttpGet("{countryCode}/rect")]
+    public async Task<IActionResult> GetCountryRectCoords(
+        string countryCode,
+        [FromQuery] float x1,
+        [FromQuery] float y1,
+        [FromQuery] float x2,
+        [FromQuery] float y2
+    )
+    {
+        CoordinatesResponseDTO[] result = await service.GetRectCoords(countryCode, x1, x2, y1, y2);
+        return Ok(result);
+    }
 }
