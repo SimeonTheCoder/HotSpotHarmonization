@@ -15,9 +15,6 @@ builder.Services.AddControllers()
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Temporary In-Memory Database for Hackathon testing 
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseInMemoryDatabase("HSH_Hackathon_MemoryDb"));
 
 var app = builder.Build();
 

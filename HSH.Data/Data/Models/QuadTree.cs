@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using HSH.Data.Data.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace HSH.Data.Models

@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Data;
 using HSH.Data.Models;
 
-namespace HSH.API.DTOs;
+namespace HSH.Core.DTOs;
 
 public class CreateFireDataDto
 {
@@ -36,5 +36,5 @@ public class CreateFireDataDto
 
     [Required]
     public DateTime Date { get; set;}
-    public string CountryName { get; internal set; }
+    public string CountryName { get; internal set; } = string.Empty;
 }

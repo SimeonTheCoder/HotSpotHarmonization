@@ -2,7 +2,7 @@ using System;
 using System.ComponentModel.DataAnnotations;
 using System.Data;
 
-namespace HSH.API.DTOs;
+namespace HSH.Core.DTOs;
 
 public class CreateTreeBoundary
 {

@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using HSH.Core.Interfaces;
 using HSH.API.Models.Requests;
 using HSH.Core.DTOs;
+using HSH.Data.Data.Models;
 
 namespace HSH.API.Controllers
 {
@@ -26,13 +27,13 @@ namespace HSH.API.Controllers
 
         // GET: api/countries/5
         [HttpGet("{id:int}")]
-        public async Task<ActionResult<List<CountryByIdDto>>> GetCountryById(GetCountryById request)
+        public async Task<ActionResult<List<Country>>> GetCountryById(int id)
         {
-            var country = await _countryService.GetCountryByIdAsync(request.Id);
+            var country = await _countryService.GetCountryByIdAsync(id);
             
             if (country == null)
             {
-                return NotFound(new { message = $"Country with ID {request.Id} not found." });
+                return NotFound(new { message = $"Country with ID {id} not found." });
             }
             
             return Ok(country);

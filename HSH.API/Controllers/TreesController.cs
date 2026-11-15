@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using HSH.API.Helpers;
-using HSH.API.DTOs;
+using HSH.Core.DTOs;
 namespace HSH.API.Controllers
 {
     [Route("api/[controller]")]

@@ -1,8 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using HSH.Core.Interfaces; 
-using HSH.Core.DTOs;  
+using HSH.Core;
 using HSH.Data.Data.Models;
-using HSH.Data.Data;
+using HSH.Data;
+using HSH.Core.DTOs;
 
 namespace HSH.Core.Services
 {
@@ -20,16 +21,9 @@ namespace HSH.Core.Services
             return await _context.Countries.ToListAsync();
         }
 
-        public async Task<CountryByIdDto?> GetCountryByIdAsync(int id)
+        public async Task<Country?> GetCountryByIdAsync(int id)
         {
-            return await _context.Countries
-                .Where(x => x.Id == id)
-                .Select(x => new CountryByIdDto
-                {
-                    CountryName = x.CountryName,
-                    CountryCode = x.CountryCode
-                })
-                .FirstOrDefaultAsync(); 
+            return await _context.Countries.Where(x => x.Id == id).FirstOrDefaultAsync(); 
         }
 
         public async Task<List<CountryByNameDTO>> GetCountryByNameAsync(string name)
@@ -55,8 +49,8 @@ namespace HSH.Core.Services
                     CountryId = g.Key.CountryId,
                     CountryName = g.Key.CountryName,
                     TotalFires = g.Count(),
-                    AverageTemperatureK = g.Average(f => (double)f.TemperatureK),
-                    MaxTemperatureK = g.Max(f => f.TemperatureK)
+                    AverageTemperatureK = g.Average(f => (double)f.Brightness),
+                    MaxTemperatureK = (float)g.Max(f => f.Brightness)
                 })
                 .OrderByDescending(s => s.TotalFires)
                 .ToListAsync();
