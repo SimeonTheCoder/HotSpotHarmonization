@@ -14,29 +14,15 @@ namespace HSH.Core.Services
             _context = context;
         }
 
-        public async Task<IEnumerable<FireDataResponseDto>> GetTop25HottestFiresByCountryAsync(
-            string countryName, 
-            DateTime startDate, 
-            DateTime endDate, 
-            FireType? fireType = null)
+        public async Task<IEnumerable<FireDataResponseDto>> GetAllFiresByCountryAsync(string countryName)
         {
             var query = _context.FireData
                 .Include(f => f.Country)
                 .Where(f => f.Country != null && 
-                            f.Country.CountryName.ToLower() == countryName.ToLower() &&
-                            f.AcquiredAt >= startDate && 
-                            f.AcquiredAt <= endDate &&
-                            f.Brightness.HasValue);
-
-            // Optional filter by fire type range if provided
-            if (fireType.HasValue)
-            {
-                query = query.Where(f => f.Type == fireType.Value);
-            }
+                            f.Country.CountryName.ToLower() == countryName.ToLower());
 
             return await query
-                .OrderByDescending(f => f.Brightness) // Hottest first
-                .Take(25)                             // Top 25 limit
+                .OrderByDescending(f => f.AcquiredAt) // Most recent first, or order as needed
                 .Select(f => new FireDataResponseDto
                 {
                     Id = f.Id,
@@ -50,5 +36,42 @@ namespace HSH.Core.Services
                 })
                 .ToListAsync();
         }
+
+            public async Task<IEnumerable<FireDataResponseDto>> GetTop25HottestFiresByCountryCodeAsync(
+                string countryCode, 
+                DateTime startDate, 
+                DateTime endDate, 
+                FireType? fireType = null)
+            {
+                var query = _context.FireData
+                    .Include(f => f.Country)
+                    .Where(f => f.Country != null && 
+                                f.Country.CountryCode.ToUpper() == countryCode.ToUpper() &&
+                                f.AcquiredAt >= startDate && 
+                                f.AcquiredAt <= endDate &&
+                                f.Brightness.HasValue);
+
+                // Optional filter by fire type range if provided
+                if (fireType.HasValue)
+                {
+                    query = query.Where(f => f.Type == fireType.Value);
+                }
+
+                return await query
+                    .OrderByDescending(f => f.Brightness) // Hottest first
+                    .Take(25)                             // Top 25 limit
+                    .Select(f => new FireDataResponseDto
+                    {
+                        Id = f.Id,
+                        Latitude = f.Latitude,
+                        Longitude = f.Longitude,
+                        Brightness = f.Brightness,
+                        AcquiredAt = f.AcquiredAt,
+                        CountryName = f.Country.CountryName,
+                        Satellite = f.Satellite.ToString(),
+                        Type = f.Type.ToString()
+                    })
+                    .ToListAsync();
+            }
     }
 }

@@ -1,4 +1,5 @@
 ﻿using System.Reflection;
+using HSH.Core.Interfaces;
 using HSH.Core.Services;
 using HSH.Data;
 
@@ -13,6 +14,8 @@ builder.Services.AddSqlServer<AppDbContext>(
 );
 
 builder.Services.AddMemoryCache();
+builder.Services.AddScoped<IFireService,FireService >();
+builder.Services.AddScoped<ICountryService,CountryService >();
 builder.Services.AddScoped<ICountryLookup, CountryLookup>();
 builder.Services.AddScoped<IFireBlockLocator, FireBlockLocator>();
 builder.Services.AddScoped<IStatisticsService, StatisticsService>();

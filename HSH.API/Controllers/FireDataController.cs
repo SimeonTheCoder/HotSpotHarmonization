@@ -74,10 +74,17 @@ namespace HSH.API.Controllers
             return Ok(fires);
         }
 
-        // GET: api/firedata/country-name/France/hottest-fires?startDate=2026-01-01&endDate=2026-12-31&fireType=1
-        [HttpGet("country-name/{countryName}/hottest-fires")]
+        [HttpGet("country-name/{countryName}")]
+        public async Task<ActionResult<IEnumerable<FireDataResponseDto>>> GetAllFiresByCountry(string countryName)
+        {
+            var fires = await _fireDataService.GetAllFiresByCountryAsync(countryName);
+            return Ok(fires);
+        }
+
+        // GET: api/firedata/country-code/FR/hottest-fires?startDate=2026-01-01&endDate=2026-12-31&fireType=1
+        [HttpGet("country-code/{countryCode}/hottest-fires")]
         public async Task<ActionResult<IEnumerable<FireDataResponseDto>>> GetTop25HottestFires(
-            string countryName,
+            string countryCode,
             [FromQuery] DateTime startDate,
             [FromQuery] DateTime endDate,
             [FromQuery] FireType? fireType = null)
@@ -87,8 +94,8 @@ namespace HSH.API.Controllers
                 return BadRequest(new { message = "StartDate cannot be later than EndDate." });
             }
 
-            var hottestFires = await _fireDataService.GetTop25HottestFiresByCountryAsync(
-                countryName, 
+            var hottestFires = await _fireDataService.GetTop25HottestFiresByCountryCodeAsync(
+                countryCode, 
                 startDate, 
                 endDate, 
                 fireType);
