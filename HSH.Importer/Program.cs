@@ -5,7 +5,6 @@
 //dotnet ef database update --project HSH.Data --startup-project HSH.Importer   # optional: the importer also applies migrations itself
 //dotnet run --project HSH.Importer -c Release -- NASAData "Server=localhost,1433;Database=HSH;User Id=sa;Password=...;TrustServerCertificate=True"
 
-
 using System.Data;
 using System.Diagnostics;
 using System.Globalization;
@@ -18,21 +17,162 @@ using Microsoft.EntityFrameworkCore;
 
 var positional = args.Where(a => !a.StartsWith("--")).ToArray();
 bool validateOnly = args.Contains("--validate");
+bool treeMode = args.Contains("--trees");
 
 if (positional.Length == 0 || !Directory.Exists(positional[0]))
 {
-    Console.Error.WriteLine("Usage: HSH.Importer <NASADataFolder> [\"<connection string>\"] [--validate]");
+    Console.Error.WriteLine(
+        "Usage: HSH.Importer <NASADataFolder> [\"<connection string>\"] [--validate]"
+    );
     return 1;
+}
+
+async Task TreeMode(string folder)
+{
+    // 1. Discover files and resolve the country from each file name
+    var fileNameRegex = new Regex(@"(?<country>.+)\.csv$", RegexOptions.IgnoreCase);
+    var files = new List<(string FullPath, string RelativePath, string CountryKey)>();
+    var unknownCountries = new SortedSet<string>();
+
+    foreach (
+        var path in Directory.EnumerateFiles(folder, "*.csv", SearchOption.AllDirectories).Order()
+    )
+    {
+        var m = fileNameRegex.Match(Path.GetFileName(path));
+        if (!m.Success)
+        {
+            Console.Error.WriteLine($"Skipping file with unexpected name: {path}");
+            continue;
+        }
+        string country = m.Groups["country"].Value;
+        if (!CountryCodes.ByFileName.ContainsKey(country))
+            unknownCountries.Add(country);
+        else
+            files.Add((path, Path.GetRelativePath(folder, path), country));
+    }
+
+    if (unknownCountries.Count > 0)
+    {
+        Console.Error.WriteLine(
+            "No hardcoded country code for: " + string.Join(", ", unknownCountries)
+        );
+        Console.Error.WriteLine("Add them to CountryCodes.cs and re-run.");
+        // throw new Exception();
+    }
+
+    Console.WriteLine($"Found {files.Count:N0} CSV files.");
+
+    // 2. Schema (EF migrations), countries, bookkeeping table
+    string connectionString = ConnectionString.Resolve(positional.Skip(1).ToArray());
+
+    Dictionary<string, int> countryIds;
+    await using (var db = DesignTimeDbContextFactory.Create(connectionString))
+    {
+        Console.WriteLine("Applying migrations...");
+        await db.Database.MigrateAsync();
+
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            IF OBJECT_ID(N'dbo.ImportedFiles') IS NULL
+            CREATE TABLE dbo.ImportedFiles (
+                FilePath   nvarchar(400) NOT NULL PRIMARY KEY,
+                [Rows]     bigint        NOT NULL,
+                ImportedAt datetime2(0)  NOT NULL DEFAULT SYSUTCDATETIME()
+            );
+            """
+        );
+
+        var existing = await db.Countries.ToDictionaryAsync(
+            c => c.CountryName,
+            StringComparer.OrdinalIgnoreCase
+        );
+        foreach (
+            var key in files.Select(f => f.CountryKey).Distinct(StringComparer.OrdinalIgnoreCase)
+        )
+        {
+            string name = CountryCodes.ToDisplayName(key);
+            if (!existing.ContainsKey(name))
+            {
+                var c = new Country
+                {
+                    CountryName = name,
+                    CountryCode = CountryCodes.ByFileName[key],
+                };
+                db.Countries.Add(c);
+                existing[name] = c;
+            }
+        }
+        await db.SaveChangesAsync();
+
+        countryIds = files
+            .Select(f => f.CountryKey)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                k => k,
+                k => existing[CountryCodes.ToDisplayName(k)].Id,
+                StringComparer.OrdinalIgnoreCase
+            );
+
+        foreach (var file in files)
+        {
+            int countryId = countryIds[file.CountryKey];
+            Console.WriteLine($"Now processing {file.CountryKey}");
+
+            if (db.TreeBoundaries.Count(t => t.TreeId == countryId) != 0)
+            {
+                Console.WriteLine($"BSP Tree for {file.CountryKey} already exists; skipping");
+                continue;
+            }
+
+            string[] lines = File.ReadAllLines(file.FullPath);
+
+            for (int i = 0; i < lines.Length; i++)
+            {
+                string[] tokens = lines[i].Split(",");
+
+                int id = i;
+                float boundary = float.Parse(tokens[0]);
+                int leftId = int.Parse(tokens[1]);
+                int rightId = int.Parse(tokens[2]);
+
+                await db.AddAsync(
+                    new TreeBoundary()
+                    {
+                        TreeId = countryId,
+                        BoundaryId = id,
+                        Value = boundary,
+                        LeftChildId = leftId,
+                        RightChildId = rightId,
+                    }
+                );
+            }
+        }
+
+        await db.SaveChangesAsync();
+        Console.WriteLine("Done!");
+    }
+}
+
+if (treeMode)
+{
+    string folder = Path.GetFullPath(positional[0]);
+    await TreeMode(folder);
+    return 0;
 }
 
 string dataRoot = Path.GetFullPath(positional[0]);
 
 // 1. Discover files and resolve the country from each file name
-var fileNameRegex = new Regex(@"^(?<source>.+?)_(?<year>\d{4})_(?<country>.+)\.csv$", RegexOptions.IgnoreCase);
+var fileNameRegex = new Regex(
+    @"^(?<source>.+?)_(?<year>\d{4})_(?<country>.+)\.csv$",
+    RegexOptions.IgnoreCase
+);
 var files = new List<(string FullPath, string RelativePath, string CountryKey)>();
 var unknownCountries = new SortedSet<string>();
 
-foreach (var path in Directory.EnumerateFiles(dataRoot, "*.csv", SearchOption.AllDirectories).Order())
+foreach (
+    var path in Directory.EnumerateFiles(dataRoot, "*.csv", SearchOption.AllDirectories).Order()
+)
 {
     var m = fileNameRegex.Match(Path.GetFileName(path));
     if (!m.Success)
@@ -41,13 +181,16 @@ foreach (var path in Directory.EnumerateFiles(dataRoot, "*.csv", SearchOption.Al
         continue;
     }
     string country = m.Groups["country"].Value;
-    if (!CountryCodes.ByFileName.ContainsKey(country)) unknownCountries.Add(country);
+    if (!CountryCodes.ByFileName.ContainsKey(country))
+        unknownCountries.Add(country);
     files.Add((path, Path.GetRelativePath(dataRoot, path), country));
 }
 
 if (unknownCountries.Count > 0)
 {
-    Console.Error.WriteLine("No hardcoded country code for: " + string.Join(", ", unknownCountries));
+    Console.Error.WriteLine(
+        "No hardcoded country code for: " + string.Join(", ", unknownCountries)
+    );
     Console.Error.WriteLine("Add them to CountryCodes.cs and re-run.");
     return 1;
 }
@@ -59,7 +202,13 @@ if (validateOnly)
     var table = FireRowParser.CreateTable();
     foreach (var f in files)
     {
-        total += FireRowParser.ParseFile(f.FullPath, countryId: 0, table, batchSize: 200_000, _ => table.Clear());
+        total += FireRowParser.ParseFile(
+            f.FullPath,
+            countryId: 0,
+            table,
+            batchSize: 200_000,
+            _ => table.Clear()
+        );
     }
     Console.WriteLine($"Validation OK: {total:N0} rows parsed.");
     return 0;
@@ -74,16 +223,21 @@ await using (var db = DesignTimeDbContextFactory.Create(connectionString))
     Console.WriteLine("Applying migrations...");
     await db.Database.MigrateAsync();
 
-    await db.Database.ExecuteSqlRawAsync("""
+    await db.Database.ExecuteSqlRawAsync(
+        """
         IF OBJECT_ID(N'dbo.ImportedFiles') IS NULL
         CREATE TABLE dbo.ImportedFiles (
             FilePath   nvarchar(400) NOT NULL PRIMARY KEY,
             [Rows]     bigint        NOT NULL,
             ImportedAt datetime2(0)  NOT NULL DEFAULT SYSUTCDATETIME()
         );
-        """);
+        """
+    );
 
-    var existing = await db.Countries.ToDictionaryAsync(c => c.CountryName, StringComparer.OrdinalIgnoreCase);
+    var existing = await db.Countries.ToDictionaryAsync(
+        c => c.CountryName,
+        StringComparer.OrdinalIgnoreCase
+    );
     foreach (var key in files.Select(f => f.CountryKey).Distinct(StringComparer.OrdinalIgnoreCase))
     {
         string name = CountryCodes.ToDisplayName(key);
@@ -96,8 +250,14 @@ await using (var db = DesignTimeDbContextFactory.Create(connectionString))
     }
     await db.SaveChangesAsync();
 
-    countryIds = files.Select(f => f.CountryKey).Distinct(StringComparer.OrdinalIgnoreCase)
-        .ToDictionary(k => k, k => existing[CountryCodes.ToDisplayName(k)].Id, StringComparer.OrdinalIgnoreCase);
+    countryIds = files
+        .Select(f => f.CountryKey)
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .ToDictionary(
+            k => k,
+            k => existing[CountryCodes.ToDisplayName(k)].Id,
+            StringComparer.OrdinalIgnoreCase
+        );
 }
 
 // 3. Bulk import, one transaction per file
@@ -107,7 +267,8 @@ await conn.OpenAsync();
 var alreadyImported = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 await using (var cmd = new SqlCommand("SELECT FilePath FROM dbo.ImportedFiles", conn))
 await using (var reader = await cmd.ExecuteReaderAsync())
-    while (await reader.ReadAsync()) alreadyImported.Add(reader.GetString(0));
+    while (await reader.ReadAsync())
+        alreadyImported.Add(reader.GetString(0));
 
 var pending = files.Where(f => !alreadyImported.Contains(f.RelativePath)).ToList();
 Console.WriteLine($"{alreadyImported.Count:N0} files already imported, {pending.Count:N0} to go.");
@@ -122,21 +283,37 @@ for (int i = 0; i < pending.Count; i++)
     var watch = Stopwatch.StartNew();
 
     await using var tx = (SqlTransaction)await conn.BeginTransactionAsync();
-    using var bulk = new SqlBulkCopy(conn, SqlBulkCopyOptions.TableLock | SqlBulkCopyOptions.CheckConstraints, tx)
+    using var bulk = new SqlBulkCopy(
+        conn,
+        SqlBulkCopyOptions.TableLock | SqlBulkCopyOptions.CheckConstraints,
+        tx
+    )
     {
         DestinationTableName = "dbo.FireData",
         BulkCopyTimeout = 0,
     };
-    foreach (DataColumn col in buffer.Columns) bulk.ColumnMappings.Add(col.ColumnName, col.ColumnName);
+    foreach (DataColumn col in buffer.Columns)
+        bulk.ColumnMappings.Add(col.ColumnName, col.ColumnName);
 
-    long rows = FireRowParser.ParseFile(f.FullPath, countryIds[f.CountryKey], buffer, batchSize: 100_000, table =>
-    {
-        bulk.WriteToServer(table);
-        table.Clear();
-    });
+    long rows = FireRowParser.ParseFile(
+        f.FullPath,
+        countryIds[f.CountryKey],
+        buffer,
+        batchSize: 100_000,
+        table =>
+        {
+            bulk.WriteToServer(table);
+            table.Clear();
+        }
+    );
 
-    await using (var mark = new SqlCommand(
-        "INSERT INTO dbo.ImportedFiles (FilePath, [Rows]) VALUES (@p, @r)", conn, tx))
+    await using (
+        var mark = new SqlCommand(
+            "INSERT INTO dbo.ImportedFiles (FilePath, [Rows]) VALUES (@p, @r)",
+            conn,
+            tx
+        )
+    )
     {
         mark.Parameters.AddWithValue("@p", f.RelativePath);
         mark.Parameters.AddWithValue("@r", rows);
@@ -145,8 +322,10 @@ for (int i = 0; i < pending.Count; i++)
     await tx.CommitAsync();
 
     grandTotal += rows;
-    Console.WriteLine($"[{i + 1}/{pending.Count}] {f.RelativePath}: {rows:N0} rows in {watch.Elapsed.TotalSeconds:N1}s " +
-                      $"(total {grandTotal:N0}, {grandTotal / Math.Max(1, totalWatch.Elapsed.TotalSeconds):N0} rows/s)");
+    Console.WriteLine(
+        $"[{i + 1}/{pending.Count}] {f.RelativePath}: {rows:N0} rows in {watch.Elapsed.TotalSeconds:N1}s "
+            + $"(total {grandTotal:N0}, {grandTotal / Math.Max(1, totalWatch.Elapsed.TotalSeconds):N0} rows/s)"
+    );
 }
 
 Console.WriteLine($"Done. Imported {grandTotal:N0} rows in {totalWatch.Elapsed}.");
@@ -184,24 +363,49 @@ static class FireRowParser
     }
 
     /// <summary>Streams a CSV into <paramref name="table"/>, calling <paramref name="flush"/> every batch.</summary>
-    public static long ParseFile(string path, int countryId, DataTable table, int batchSize, Action<DataTable> flush)
+    public static long ParseFile(
+        string path,
+        int countryId,
+        DataTable table,
+        int batchSize,
+        Action<DataTable> flush
+    )
     {
         using var reader = new StreamReader(path, System.Text.Encoding.UTF8, true, 1 << 20);
         string? header = reader.ReadLine();
-        if (header is null) return 0;
+        if (header is null)
+            return 0;
 
         // The first line names the columns; look them up by name so MODIS and VIIRS layouts both work.
-        var idx = header.Trim().Split(',')
+        var idx = header
+            .Trim()
+            .Split(',')
             .Select((name, i) => (name: name.Trim().ToLowerInvariant(), i))
             .ToDictionary(x => x.name, x => x.i);
 
-        int Req(string n) => idx.TryGetValue(n, out var i) ? i : throw new InvalidDataException($"{path}: missing column '{n}'");
+        int Req(string n) =>
+            idx.TryGetValue(n, out var i)
+                ? i
+                : throw new InvalidDataException($"{path}: missing column '{n}'");
         int Opt(string n) => idx.TryGetValue(n, out var i) ? i : -1;
 
-        int cLat = Req("latitude"), cLon = Req("longitude"), cScan = Req("scan"), cTrack = Req("track"),
-            cDate = Req("acq_date"), cTime = Req("acq_time"), cSat = Req("satellite"), cInst = Req("instrument"),
-            cConf = Req("confidence"), cVer = Req("version"), cFrp = Req("frp"), cDn = Req("daynight"), cType = Req("type");
-        int cBright = Opt("brightness"), cT31 = Opt("bright_t31"), cTi4 = Opt("bright_ti4"), cTi5 = Opt("bright_ti5");
+        int cLat = Req("latitude"),
+            cLon = Req("longitude"),
+            cScan = Req("scan"),
+            cTrack = Req("track"),
+            cDate = Req("acq_date"),
+            cTime = Req("acq_time"),
+            cSat = Req("satellite"),
+            cInst = Req("instrument"),
+            cConf = Req("confidence"),
+            cVer = Req("version"),
+            cFrp = Req("frp"),
+            cDn = Req("daynight"),
+            cType = Req("type");
+        int cBright = Opt("brightness"),
+            cT31 = Opt("bright_t31"),
+            cTi4 = Opt("bright_ti4"),
+            cTi5 = Opt("bright_ti5");
 
         long count = 0;
         int lineNo = 1;
@@ -211,7 +415,8 @@ static class FireRowParser
         while ((line = reader.ReadLine()) != null)
         {
             lineNo++;
-            if (line.Length == 0) continue;
+            if (line.Length == 0)
+                continue;
             var p = line.Split(',');
             try
             {
@@ -246,17 +451,20 @@ static class FireRowParser
                 values[16] = (byte)ParseDayNight(p[cDn]);
                 values[17] = byte.Parse(p[cType], Inv);
             }
-            catch (Exception ex) when (ex is FormatException or IndexOutOfRangeException or OverflowException)
+            catch (Exception ex)
+                when (ex is FormatException or IndexOutOfRangeException or OverflowException)
             {
                 throw new InvalidDataException($"{path}:{lineNo}: {ex.Message} -> \"{line}\"", ex);
             }
 
             table.Rows.Add(values);
             count++;
-            if (table.Rows.Count >= batchSize) flush(table);
+            if (table.Rows.Count >= batchSize)
+                flush(table);
         }
 
-        if (table.Rows.Count > 0) flush(table);
+        if (table.Rows.Count > 0)
+            flush(table);
         return count;
     }
 
@@ -270,35 +478,39 @@ static class FireRowParser
         return d.AddHours(hhmm / 100).AddMinutes(hhmm % 100);
     }
 
-    private static Satellite ParseSatellite(string s) => s.Trim() switch
-    {
-        "Terra" or "T" => Satellite.Terra,
-        "Aqua" or "A" => Satellite.Aqua,
-        "N" or "1" => Satellite.SuomiNpp,
-        "N20" => Satellite.Noaa20,
-        "N21" => Satellite.Noaa21,
-        _ => throw new FormatException($"Unknown satellite '{s}'"),
-    };
+    private static Satellite ParseSatellite(string s) =>
+        s.Trim() switch
+        {
+            "Terra" or "T" => Satellite.Terra,
+            "Aqua" or "A" => Satellite.Aqua,
+            "N" or "1" => Satellite.SuomiNpp,
+            "N20" => Satellite.Noaa20,
+            "N21" => Satellite.Noaa21,
+            _ => throw new FormatException($"Unknown satellite '{s}'"),
+        };
 
-    private static Instrument ParseInstrument(string s) => s.Trim().ToUpperInvariant() switch
-    {
-        "MODIS" => Instrument.Modis,
-        "VIIRS" => Instrument.Viirs,
-        _ => throw new FormatException($"Unknown instrument '{s}'"),
-    };
+    private static Instrument ParseInstrument(string s) =>
+        s.Trim().ToUpperInvariant() switch
+        {
+            "MODIS" => Instrument.Modis,
+            "VIIRS" => Instrument.Viirs,
+            _ => throw new FormatException($"Unknown instrument '{s}'"),
+        };
 
-    private static ConfidenceLevel ParseConfidenceLevel(string s) => s.ToLowerInvariant() switch
-    {
-        "l" or "low" => ConfidenceLevel.Low,
-        "n" or "nominal" => ConfidenceLevel.Nominal,
-        "h" or "high" => ConfidenceLevel.High,
-        _ => throw new FormatException($"Unknown confidence '{s}'"),
-    };
+    private static ConfidenceLevel ParseConfidenceLevel(string s) =>
+        s.ToLowerInvariant() switch
+        {
+            "l" or "low" => ConfidenceLevel.Low,
+            "n" or "nominal" => ConfidenceLevel.Nominal,
+            "h" or "high" => ConfidenceLevel.High,
+            _ => throw new FormatException($"Unknown confidence '{s}'"),
+        };
 
-    private static DayNight ParseDayNight(string s) => s.Trim().ToUpperInvariant() switch
-    {
-        "D" => DayNight.Day,
-        "N" => DayNight.Night,
-        _ => throw new FormatException($"Unknown daynight '{s}'"),
-    };
+    private static DayNight ParseDayNight(string s) =>
+        s.Trim().ToUpperInvariant() switch
+        {
+            "D" => DayNight.Day,
+            "N" => DayNight.Night,
+            _ => throw new FormatException($"Unknown daynight '{s}'"),
+        };
 }
