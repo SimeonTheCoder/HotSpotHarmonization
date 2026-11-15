@@ -38,6 +38,10 @@ namespace HSH.Data
 
             modelBuilder.Entity<QuadTree>().HasIndex(q => q.CellId);
             modelBuilder.Entity<QuadTree>().HasIndex(q => q.FireId);
+            modelBuilder
+                .Entity<QuadTree>()
+                .HasIndex(q => new { q.CountryId, q.CellId })
+                .IncludeProperties(q => q.FireId);
         }
   
     

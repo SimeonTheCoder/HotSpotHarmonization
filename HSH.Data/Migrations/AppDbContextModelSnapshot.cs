@@ -211,9 +211,11 @@ namespace HSH.Data.Migrations
 
                     b.HasIndex("CellId");
 
-                    b.HasIndex("CountryId");
-
                     b.HasIndex("FireId");
+
+                    b.HasIndex("CountryId", "CellId");
+
+                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("CountryId", "CellId"), new[] { "FireId" });
 
                     b.ToTable("QuadTrees");
                 });
