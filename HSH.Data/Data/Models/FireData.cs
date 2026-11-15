@@ -60,7 +60,6 @@ namespace HSH.Data.Models
 
         public DayNight DayNight { get; set; }
 
-        /// <summary>0 = presumed vegetation fire, 1 = active volcano, 2 = other static land source, 3 = offshore.</summary>
-        public byte Type { get; set; }
+        public FireType Type { get; set; }
     }
 }
