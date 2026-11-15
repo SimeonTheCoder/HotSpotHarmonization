@@ -80,7 +80,7 @@ function Statistics() {
     const isPie = kind === "pie";
     const shownView = isPie ? "month" : view;
 
-    const countryName = countries.find((c) => c.code === country)?.name ?? "";
+    const countryName = countries.find((c) => c.code === country)?.label ?? "";
 
     function toggleType(type: FireType) {
         setTypes(types.includes(type) ? types.filter((t) => t !== type) : [...types, type]);
