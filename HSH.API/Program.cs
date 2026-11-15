@@ -1,4 +1,4 @@
-﻿using HSH.Data.Data;
+﻿using HSH.Data;
 
 var builder = WebApplication.CreateBuilder();
 
