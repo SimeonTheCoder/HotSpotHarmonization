@@ -77,6 +77,9 @@ function saveFile(url: string, fileName: string) {
 }
 
 function Statistics() {
+    const [allCountryFires, setAllCountryFires] = useState<FireDataResponseDto[]>([]);
+    const [countryFiresLoading, setCountryFiresLoading] = useState(false);
+    const [countryFiresError, setCountryFiresError] = useState<string | null>(null);
     const [country, setCountry] = useState("BGR");
     const [stat, setStat] = useState<StatType>("fires-over-time");
     const [kind, setKind] = useState("bar");
@@ -96,6 +99,15 @@ function Statistics() {
         error: string | null;
     } | null>(null);
     // the bar the user clicked: the biggest fires of that month (or year) are listed under the chart
+    const [picked, setPicked] = useState<{
+        country: string;
+        stat: StatType;
+        year: number;
+        month: number | null;
+        instrument: "modis" | "viirs" | null; // the MODIS or VIIRS bar of "MODIS vs VIIRS"
+    } | null>(null);
+    // the hottest fires the API sent for the clicked bar, together with the choices they belong to
+    const [fireResult, setFireResult] = useState<{ key: string; fires: Fire[]; error: string | null } | null>(null);
     const [picked, setPicked] = useState<{
         country: string;
         stat: StatType;
@@ -160,6 +172,34 @@ function Statistics() {
         setTypes(types.includes(type) ? types.filter((t) => t !== type) : [...types, type]);
     }
 
+    
+    useEffect(() => {
+        if (!countryName) return;
+
+        let cancelled = false;
+        setCountryFiresLoading(true);
+        setCountryFiresError(null);
+
+        getAllFiresByCountry(countryName)
+            .then((data) => {
+                if (!cancelled) {
+                    setAllCountryFires(data);
+                    setCountryFiresLoading(false);
+                }
+            })
+            .catch((err) => {
+                console.error(err);
+                if (!cancelled) {
+                    setCountryFiresError("Could not load country fire records.");
+                    setCountryFiresLoading(false);
+                }
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [countryName]);
+
     // ask the API for the chosen year(s); until the answer arrives the page shows the loading animation
     useEffect(() => {
         if (!usesApi || !countryCode2) return;
@@ -205,8 +245,21 @@ function Statistics() {
     // the list only belongs to the country it was opened for, and only to the bar chart
     const period =
         picked && picked.country === country && picked.stat === stat && kind === "bar" && !extra ? picked : null;
+    const period =
+        picked && picked.country === country && picked.stat === stat && kind === "bar" && !extra ? picked : null;
     const periodYear = period?.year;
     const periodMonth = period?.month;
+    const periodInstrument = period?.instrument ?? null;
+
+    // the list of the hottest fires comes from the API too
+    const firesKey =
+        period && countryCode2
+            ? `${countryCode2}|${periodYear}|${periodMonth}|${types.join(",")}|${periodInstrument}`
+            : null;
+    const firesDone = firesKey !== null && fireResult?.key === firesKey;
+    const fires = firesDone ? fireResult.fires : [];
+    const firesError = firesDone ? fireResult.error : null;
+    const firesLoading = firesKey !== null && !firesDone;
     const periodInstrument = period?.instrument ?? null;
 
     // the list of the hottest fires comes from the API too
@@ -221,7 +274,18 @@ function Statistics() {
 
     useEffect(() => {
         if (firesKey === null || !countryCode2 || periodYear === undefined || periodMonth === undefined) return;
+        if (firesKey === null || !countryCode2 || periodYear === undefined || periodMonth === undefined) return;
         let cancelled = false;
+        getTopFires(countryCode2, periodYear, periodMonth, types, periodInstrument)
+            .then((result) => {
+                if (!cancelled) setFireResult({ key: firesKey, fires: result, error: null });
+            })
+            .catch((error: unknown) => {
+                console.error(error);
+                if (!cancelled) {
+                    setFireResult({ key: firesKey, fires: [], error: "The fires could not be loaded. Is the API running?" });
+                }
+            });
         getTopFires(countryCode2, periodYear, periodMonth, types, periodInstrument)
             .then((result) => {
                 if (!cancelled) setFireResult({ key: firesKey, fires: result, error: null });
@@ -236,13 +300,17 @@ function Statistics() {
             cancelled = true;
         };
     }, [firesKey, countryCode2, periodYear, periodMonth, types, periodInstrument]);
+    }, [firesKey, countryCode2, periodYear, periodMonth, types, periodInstrument]);
 
+    // a click on a bar: which year (and month, and instrument in "MODIS vs VIIRS") does it stand for?
     // a click on a bar: which year (and month, and instrument in "MODIS vs VIIRS") does it stand for?
     function pickBar(index: number, seriesIndex: number) {
         const year = Number(oneYear ? monthYear : seriesIndex === 0 ? yearA : yearB);
         const month = index + 1;
         const instrument = shownView === "satellite" ? (seriesIndex === 0 ? "modis" : "viirs") : null;
+        const instrument = shownView === "satellite" ? (seriesIndex === 0 ? "modis" : "viirs") : null;
         setOpenFire(null);
+        setPicked({ country, stat, year, month, instrument });
         setPicked({ country, stat, year, month, instrument });
     }
 
@@ -753,7 +821,10 @@ function Statistics() {
                         {period && (
                             <DetailedStats
                                 title={`Detailed stats: ${fires.length || 25} hottest ${period.instrument ? period.instrument.toUpperCase() + " " : ""}fires in ${countryName}, ${period.month ? FULL_MONTHS[period.month - 1] + " " : ""}${period.year}`}
+                                title={`Detailed stats: ${fires.length || 25} hottest ${period.instrument ? period.instrument.toUpperCase() + " " : ""}fires in ${countryName}, ${period.month ? FULL_MONTHS[period.month - 1] + " " : ""}${period.year}`}
                                 fires={fires}
+                                loading={firesLoading}
+                                error={firesError}
                                 loading={firesLoading}
                                 error={firesError}
                                 openId={openFire}
@@ -786,9 +857,22 @@ function mapLink(f: Fire): string {
     return `/map?${params}`;
 }
 
+// the map page puts a pin on exactly these coordinates (see MapPage: /map?lat=..&lon=..)
+function mapLink(f: Fire): string {
+    const params = new URLSearchParams({
+        lat: String(f.latitude),
+        lon: String(f.longitude),
+        date: `${f.acq_date} ${formatTime(f.acq_time)} UTC`,
+    });
+    if (f.temperature !== null) params.set("temp", String(f.temperature));
+    return `/map?${params}`;
+}
+
 interface DetailedStatsProps {
     title: string;
     fires: Fire[];
+    loading: boolean;
+    error: string | null;
     loading: boolean;
     error: string | null;
     openId: string | null;
@@ -797,6 +881,7 @@ interface DetailedStatsProps {
 }
 
 // the "detailed stats" list of the biggest fires; after a click on the coordinates only that fire stays, with more details
+function DetailedStats({ title, fires, loading, error, openId, onOpen, onClose }: DetailedStatsProps) {
 function DetailedStats({ title, fires, loading, error, openId, onOpen, onClose }: DetailedStatsProps) {
     const open = fires.find((f) => f.id === openId) ?? null;
     const shown = open ? [open] : fires;
@@ -817,6 +902,14 @@ function DetailedStats({ title, fires, loading, error, openId, onOpen, onClose }
                     </button>
                 </div>
             </div>
+            {loading ? (
+                <div className="stats-loading" role="status">
+                    <span className="spinner" aria-hidden="true" />
+                    <p>Finding the hottest fires…</p>
+                </div>
+            ) : error ? (
+                <p className="counted" role="alert">{error}</p>
+            ) : fires.length === 0 ? (
             {loading ? (
                 <div className="stats-loading" role="status">
                     <span className="spinner" aria-hidden="true" />
@@ -848,6 +941,7 @@ function DetailedStats({ title, fires, loading, error, openId, onOpen, onClose }
                                         </button>
                                     </td>
                                     <td>{f.temperature ?? "n/a"}</td>
+                                    <td>{f.temperature ?? "n/a"}</td>
                                 </tr>
                             ))}
                         </tbody>
@@ -871,8 +965,21 @@ function DetailedStats({ title, fires, loading, error, openId, onOpen, onClose }
                             {open.bright_ti5 !== null && (
                                 <div><dt>Brightness, channel I-5 (bright_ti5)</dt><dd>{open.bright_ti5} K</dd></div>
                             )}
+                            {open.brightness !== null && (
+                                <div><dt>Brightness</dt><dd>{open.brightness} K</dd></div>
+                            )}
+                            {open.bright_t31 !== null && (
+                                <div><dt>Brightness, channel 31 (bright_t31)</dt><dd>{open.bright_t31} K</dd></div>
+                            )}
+                            {open.bright_ti4 !== null && (
+                                <div><dt>Brightness, channel I-4 (bright_ti4)</dt><dd>{open.bright_ti4} K</dd></div>
+                            )}
+                            {open.bright_ti5 !== null && (
+                                <div><dt>Brightness, channel I-5 (bright_ti5)</dt><dd>{open.bright_ti5} K</dd></div>
+                            )}
                             <div><dt>Fire power (frp)</dt><dd>{fmt(open.frp)} MW</dd></div>
                             <div><dt>Pixel size (scan x track)</dt><dd>{open.scan} x {open.track} km</dd></div>
+                            <div><dt>Confidence</dt><dd>{open.confidence}</dd></div>
                             <div><dt>Confidence</dt><dd>{open.confidence}</dd></div>
                             <div><dt>Satellite</dt><dd>{open.satellite}</dd></div>
                             <div><dt>Instrument</dt><dd>{open.instrument}</dd></div>
@@ -882,6 +989,7 @@ function DetailedStats({ title, fires, loading, error, openId, onOpen, onClose }
                                 <dt>Map</dt>
                                 <dd>
                                     <Link
+                                        to={mapLink(open)}
                                         to={mapLink(open)}
                                     >
                                         Show on the map
