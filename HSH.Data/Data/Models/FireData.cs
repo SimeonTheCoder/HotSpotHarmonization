@@ -1,44 +1,65 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using HSH.Data.Enums;
 
 namespace HSH.Data.Models
 {
-    [Table("Data")]
+    [Table("FireData")]
     public class FireData
     {
         [Key]
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-        public int Id { get; set; }  // Primary Key: fireId
-        
-        [Required]
-        public int TreeId { get; set; }  // Foreign key reference to Trees table
-        public virtual TreeBoundary Tree { get; set; } // Navigation property
-        
-        [Required]
-        public int CountryId { get; set; }  // Foreign key reference to Countries table
-        public virtual Country Country { get; set; } // Navigation property
-        
-        [Required]
+        public long Id { get; set; }
+
+        public int? TreeId { get; set; }
+        public virtual TreeBoundary? Tree { get; set; }
+
+        public int CountryId { get; set; }
+        public virtual Country Country { get; set; } = null!;
+
         [Range(-90, 90)]
         public double Latitude { get; set; }
-        
-        [Required]
+
         [Range(-180, 180)]
         public double Longitude { get; set; }
-        
-        public SatelliteSource Sat { get; set; }
-        [Required]
-        [Range(typeof(decimal), "0.1", "100")]
-        public decimal PixelSize { get; set; }
-        
-        [Required]
-        public float TemperatureK { get; set; }
-        
-        [Required]
-        public int Type { get; set; }
-        
-        [Required]
-        public DateTime Date { get; set; }
+
+        // acq_date + acq_time (UTC)
+        [Column(TypeName = "datetime2(0)")]
+        public DateTime AcquiredAt { get; set; }
+
+        public Satellite Satellite { get; set; }
+        public Instrument Instrument { get; set; }
+
+        /// <summary>MODIS only: confidence 0-100 %.</summary>
+        public byte? ConfidencePercent { get; set; }
+
+        /// <summary>VIIRS only: low / nominal / high.</summary>
+        public ConfidenceLevel? ConfidenceLevel { get; set; }
+
+        /// <summary>MODIS only: "brightness" - channel 21/22 brightness temperature (K).</summary>
+        public float? Brightness { get; set; }
+
+        /// <summary>MODIS only: "bright_t31" - channel 31 brightness temperature (K).</summary>
+        public float? BrightT31 { get; set; }
+
+        /// <summary>VIIRS only: "bright_ti4" - I-4 channel brightness temperature (K).</summary>
+        public float? BrightTi4 { get; set; }
+
+        /// <summary>VIIRS only: "bright_ti5" - I-5 channel brightness temperature (K).</summary>
+        public float? BrightTi5 { get; set; }
+
+        public float Scan { get; set; }
+        public float Track { get; set; }
+
+        /// <summary>Fire radiative power (MW).</summary>
+        public float Frp { get; set; }
+
+        /// <summary>Collection / version, e.g. 6.2, 61.03, 2.</summary>
+        public float Version { get; set; }
+
+        public DayNight DayNight { get; set; }
+
+        public FireType Type { get; set; }
     }
 }

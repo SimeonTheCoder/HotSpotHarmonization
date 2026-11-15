@@ -1,27 +1,30 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Microsoft.EntityFrameworkCore;
 
 namespace HSH.Data.Models
 {
-    [Table("quad_tree")]
     public class QuadTree
     {
         [Key]
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-        public int Id { get; set; }  // Primary Key
-        
-        [Required, MaxLength(50)]
-        public string CellId { get; set; }  // e.g., the spatial cell identifier
-        
+        public int Id { get; set; } // Primary Key
+
         [Required]
-        public int FireId { get; set; }  // Reference to fire in Data table
-        public virtual FireData Fire { get; set; } // Navigation property
+        public ushort CellId { get; set; }
 
-        // Clean separation instead of a mixed string column:
-        public int? TreeId { get; set; }
-        public virtual TreeBoundary Tree { get; set; }
+        public long? FireId { get; set; } // Reference to fire in FireData table
 
-        public int? CountryId { get; set; }
-        public virtual Country Country { get; set; }
+        [ForeignKey(nameof(FireId))]
+        public virtual FireData Fire { get; set; } = null!;
+
+        [Required]
+        public int TreeId { get; set; }
+
+        [Required]
+        public int CountryId { get; set; }
+
+        [ForeignKey(nameof(CountryId))]
+        public virtual Country Country { get; set; } = null!;
     }
 }
