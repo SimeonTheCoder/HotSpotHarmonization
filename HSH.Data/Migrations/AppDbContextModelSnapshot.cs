@@ -195,16 +195,17 @@ namespace HSH.Data.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("CellId")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                    b.Property<int>("CellId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CountryId")
+                        .HasColumnType("int");
 
                     b.Property<long>("FireId")
                         .HasColumnType("bigint");
 
-                    b.Property<string>("TreeOrCountryId")
-                        .HasColumnType("nvarchar(max)");
+                    b.Property<int>("TreeId")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -224,6 +225,12 @@ namespace HSH.Data.Migrations
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<int>("BoundaryId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("LeftChildId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RightChildId")
                         .HasColumnType("int");
 
                     b.Property<int>("TreeId")
@@ -385,6 +392,17 @@ namespace HSH.Data.Migrations
                     b.Navigation("Country");
 
                     b.Navigation("Tree");
+                });
+
+            modelBuilder.Entity("HSH.Data.Models.QuadTree", b =>
+                {
+                    b.HasOne("HSH.Data.Models.FireData", "Fire")
+                        .WithMany()
+                        .HasForeignKey("FireId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Fire");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>

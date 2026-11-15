@@ -1,6 +1,6 @@
-using Microsoft.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Microsoft.EntityFrameworkCore;
 
 namespace HSH.Data.Models
 {
@@ -9,14 +9,21 @@ namespace HSH.Data.Models
     {
         [Key]
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-        public int Id { get; set; }  // Primary Key
-        
-        [Required, MaxLength(50)]
-        public string CellId { get; set; }
-        
-        [Required]
-        public long FireId { get; set; }  // Reference to fire in FireData table
+        public int Id { get; set; } // Primary Key
 
-        public string? TreeOrCountryId { get; set; }  // Could store either ID (string for flexibility)
+        [Required]
+        public ushort CellId { get; set; }
+
+        [Required]
+        public long FireId { get; set; } // Reference to fire in FireData table
+
+        [ForeignKey(nameof(FireId))]
+        public virtual FireData Fire { get; set; } = null!;
+
+        [Required]
+        public int TreeId { get; set; } // Could store either ID (string for flexibility)
+
+        [Required]
+        public int CountryId {get; set;}
     }
 }
