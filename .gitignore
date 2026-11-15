@@ -12,6 +12,7 @@
 *.userosscache
 *.sln.docstates
 *.env
+/NASAData
 
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
